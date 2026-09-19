@@ -1,91 +1,64 @@
-# TurboWarp-Extension-Template
+# TurboWarp-Structured-Data
 
 [English](README.md)
 
-ViteでTurboWarp拡張機能を開発、テスト、ビルド、リリースするための再利用可能なTypeScriptテンプレートです。
-
-## 利用者ガイド
-
-このテンプレートからリポジトリを作成し、packageと拡張機能metadataを置き換え、`src/extension.ts`でブロックを実装し、生成済みartifactをコミットします。
-
-参照用にtemplate packageを使う場合はversionを固定します。
-
-```bash
-pnpm add --save-exact @kubohiroya/turbowarp-extension-template@0.4.0
-```
+名前付き構造化データ、安全なJSON/YAML codec、決定的なpath操作、上限付き反復、server compiler契約を提供するTurboWarp機能拡張です。
 
 ## できること
 
-- TurboWarp互換の単一JavaScript拡張ファイルをビルドします。
-- 決定的な`dist/extension-manifest.json` API契約を出力します。
-- `src/block-definitions.json`からREADMEのブロック参照を生成します。
-- source、document、生成済み`dist/`、repository policy、npm package内容を一括検査します。
+- JSONまたはYAMLをtarget-localな名前付きnamespaceへparse
+- 名前付きデータをcanonical JSONまたは決定的YAMLへ変換
+- 制限付きpathによる参照、存在確認、不変更新、削除
+- ソート済みkey、array長、上限付き決定的反復
+- compiler manifestとbrowser/server意味論fixtureの出力
 
-## 要件と安全性
+## 動作条件と安全性
 
-- Node.js 22以上
-- Corepack経由のpnpm
-- `unsandboxed: true`を設定した拡張機能ではTurboWarpのunsandboxed extension option
+namespaceとloop contextがTurboWarp BlockUtilityのtarget/thread identityを使うため、sandboxなしで実行します。network、storage、Hono、Cloudflare、Firebaseへ直接依存しません。
 
-信頼できる生成済み拡張コードだけを読み込んでください。unsandboxed extensionはブラウザページへアクセスできます。
+`STRUCTURED_DATA_MVP`は起動時固定で既定`false`です。TurboWarpページのcontextで`globalThis.STRUCTURED_DATA_MVP = true`を設定し、**サンドボックスなしで実行する**を有効にして`dist/structured-data.js`を読み込みます。flagなしで起動すれば即時rollbackできます。
 
-## インストール
-
-```bash
-corepack enable
-pnpm install --frozen-lockfile
-```
+JSON/YAML入力は256 KiB、深さ64、50,000 valueまでです。YAML alias、warning、unknown tag、duplicate key、string以外のmap key、未対応scalarは拒否します。
 
 ## クイックスタート
 
-1. このテンプレートからリポジトリを作成します。
-2. `package.json` metadataと`repo-policy.json`を更新します。
-3. `src/config.ts`を編集します。
-4. `src/block-definitions.json`にブロックを定義します。
-5. `src/extension.ts`に実行時の動作を実装します。
-6. `pnpm run docs`を実行します。
-7. `pnpm run check`を実行します。
-
-開発中に継続ビルドする場合:
-
-```bash
-pnpm run dev
-```
-
-## ブロック参照
-
-### `hello [NAME]`
-
-指定された名前へのローカライズ可能な挨拶を返します。
-
-| Property | Value |
-|---|---|
-| Type | Reporter |
-| Opcode | `hello` |
-| `NAME` | String, default: `world` |
-
-## 重要な動作
-
 ```text
-TypeScript source
-  -> Vite
-  -> vite-plugin-turbowarp-extension
-  -> dist/<extension-name>.js
+parse YAML [name: sensor
+enabled: true] as [config]
 
-Extension config + block definitions
-  -> extension manifest plugin
-  -> dist/extension-manifest.json
+set [config] at path [$.enabled] to JSON [false]
+
+to JSON [config]
+→ {"enabled":false,"name":"sensor"}
 ```
 
-生成されるJavaScriptは、Extension Gallery metadataと標準の`(function (Scratch) { ... })(Scratch);` wrapperを持つ、単一の非minify TurboWarp拡張ファイルです。
+名前は実行中のspriteまたはstage target単位です。同名をparseするとbindingを置換します。名前付きデータはproject停止時に破棄され、project fileへ永続化しません。
 
-各ビルドは`formatVersion: 1`の`dist/extension-manifest.json`を出力します。このファイルには、拡張機能ID、ブロックopcodeと種類、引数IDと種類、メニュー参照が決定的な順序で記録されます。`sb3-toolchain`のようなツールは、埋め込み拡張機能の更新やID移行前にこの契約を比較できます。v1契約については[アーキテクチャ文書](docs/architecture.ja.md)と[JSON Schema](schemas/extension-manifest.schema.json)を参照してください。
+## pathと更新規則
 
-## 互換性
+使用できるpathは`$`、`$.users[0].profile.name`、`$["key.with.dots"]`です。dot keyは`[A-Za-z_][A-Za-z0-9_]*`、indexは0以上の10進整数です。wildcard、slice、filter、再帰探索、式評価は拒否します。
 
-canonical READMEは`README.md`です。日本語ドキュメントは`README.ja.md`を使います。新規リポジトリでは`README_ja.md`を作成しません。
+`set`のreplacementはJSON形式です。root置換、既存array要素の置換、親が存在するobject keyの追加を許可します。中間container生成やarray appendは行いません。array要素削除は後続要素を左へ詰め、root削除は禁止です。
 
-リポジトリ固有の差分は`repo-policy.json`に記録します。upstream fork、mixed-license content、legacy package name、third-party bundleは、検査を弱めるのではなくpolicy例外として表現します。
+## 反復とerror
+
+arrayはindex昇順、objectはUnicodeコードポイント順で反復します。`max N`は1〜1000の整数で既定100です。件数超過は打ち切らず失敗します。server compilerでは`N`を静的数値literalにする必要があります。
+
+安定error codeは`INVALID_JSON`、`INVALID_YAML`、`INVALID_NAME`、`DATA_NOT_FOUND`、`PARSE_LIMIT_EXCEEDED`、`INVALID_PATH`、`PATH_NOT_FOUND`、`TYPE_MISMATCH`、`INDEX_OUT_OF_RANGE`、`ITERATION_LIMIT_EXCEEDED`、`ITERATION_CONTEXT_REQUIRED`です。
+
+## ブロック
+
+| 分類 | 主なblock |
+|---|---|
+| import | `parse JSON ... as ...`、`parse YAML ... as ...` |
+| export | `to JSON ...`、`to YAML ...` |
+| namespace | `structured data ... exists?`、`delete structured data ...` |
+| path | get、has、set、delete、keys、length |
+| iteration | for each、current key/index/value |
+
+## compiler契約
+
+`dist/extension-manifest.json` format version 3はtarget-local named reference、型付きpath、argument/result型、effect、error、IR v2 operationを宣言します。[architecture](docs/architecture.ja.md)、[JSON Schema](schemas/extension-manifest.schema.json)、[semantic parity fixture](tests/fixtures/semantic-parity.json)を参照してください。
 
 ## 開発
 
@@ -93,19 +66,8 @@ canonical READMEは`README.md`です。日本語ドキュメントは`README.ja.
 pnpm run check
 ```
 
-このcheckは型検査、lint、test、生成README検証、`dist/`再現性、repository policy検証、npm package dry-runを実行します。
-
-## リリース
-
-`package.json`をversionの正本にします。公開前に次を実行します。
-
-```bash
-pnpm run check
-npm pack --dry-run --ignore-scripts
-```
-
-release artifactには`dist/example-extension.js`、`dist/extension-manifest.json`、`README.md`、`README.ja.md`、`LICENSE`を含めます。
-
 ## ライセンス
 
 SPDX-License-Identifier: MPL-2.0
+
+bundleへ含まれるthird-party softwareのlicenseは[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)に記載します。

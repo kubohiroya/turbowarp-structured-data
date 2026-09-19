@@ -1,0 +1,26 @@
+{
+  "namespace": "structured",
+  "kind": "structured",
+  "scope": "target",
+  "revision": "1",
+  "representations": {
+    "json": {
+      "mediaType": "application/json; charset=utf-8",
+      "text": "{\"a\":1,\"b\":2}",
+      "byteLength": 13
+    },
+    "yaml": {
+      "mediaType": "application/yaml; charset=utf-8",
+      "text": "a: 1\nb: 2",
+      "byteLength": 9
+    }
+  },
+  "errors": {
+    "missing": "NAMED_DATA_NOT_FOUND",
+    "otherTarget": "NAMED_DATA_NOT_FOUND",
+    "projectScope": "NAMED_DATA_SCOPE_MISMATCH",
+    "rawRepresentation": "NAMED_DATA_REPRESENTATION_UNSUPPORTED",
+    "aborted": "NAMED_DATA_ABORTED",
+    "released": "NAMED_DATA_PROVIDER_RELEASED"
+  }
+}

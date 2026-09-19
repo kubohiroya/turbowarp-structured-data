@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "productName": "TurboWarp-Extension-Template",
-  "packageType": "extension-template",
+  "productName": "TurboWarp-Structured-Data",
+  "packageType": "turbowarp-extension",
   "licensePolicy": "mpl-2.0",
   "readmeLanguages": ["en", "ja"],
   "canonicalReadme": "README.md",
@@ -12,15 +12,15 @@
     "minimum": "22.18.0"
   },
   "packageManager": "pnpm",
-  "requiredFiles": ["README.md", "README.ja.md", "LICENSE"],
+  "requiredFiles": ["README.md", "README.ja.md", "THIRD_PARTY_NOTICES.md", "LICENSE"],
   "exceptions": {
     "upstreamFork": false,
-    "mixedContentLicenses": false,
+    "mixedContentLicenses": true,
     "legacyPackageName": false,
-    "thirdPartyBundle": false
+    "thirdPartyBundle": true
   },
   "migrationChecklist": [
-    "Replace placeholder package metadata with repository-specific values.",
+    "Keep package metadata aligned with turbowarp-structured-data.",
     "Keep LICENSE as the full Mozilla Public License 2.0 text unless policy records an exception.",
     "Keep README.md as the canonical English entrypoint and README.ja.md for Japanese content.",
     "Run pnpm run check before publishing generated artifacts."

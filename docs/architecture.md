@@ -2,43 +2,29 @@
 
 [日本語](architecture.ja.md)
 
-## Build outputs
+The optional Named Data integration imports its canonical contract and shared runtime registry from
+`@kubohiroya/turbowarp-named-data/composition`. The `structured` provider is registered with
+`kind: structured`, target scope, and persistent registration. `PROJECT_STOP_ALL` clears target
+bindings and open bodies but retains the provider registration for the next project session.
 
-The project keeps runtime behavior and compatibility metadata separate while generating both from
-the same checked-in source definitions.
+## Named data model
 
-```text
-src/index.ts + src/extension.ts
-  -> vite-plugin-turbowarp-extension
-  -> dist/<extension>.js
+The extension owns a `WeakMap<Target, Map<Name, JsonValue>>`. Names are trimmed, non-empty strings. A sprite and the stage have separate namespaces. Parsing replaces a binding atomically; path updates construct a new JSON value and replace the binding only after validation succeeds. `PROJECT_STOP_ALL` replaces the registries and iteration stacks, so runtime state does not survive a project stop.
 
-src/config.ts + src/block-definitions.json
-  -> extension-api-manifest Vite plugin
-  -> dist/extension-manifest.json
-```
+JSON values are `null`, booleans, finite numbers, strings, arrays, and objects with own enumerable properties. They never cross the public block boundary as opaque internal tokens. JSON/YAML text appears only at parse, render, set-value, get-value, keys, and current-value boundaries required by Scratch reporter types.
 
-The manifest plugin runs in Vite's post-build phase. This preserves the JavaScript plugin's
-single-output validation and adds the manifest only after the TurboWarp bundle is complete.
+## Codecs and limits
 
-## Extension API manifest v1
+`src/codecs.ts` parses JSON through the shared core and YAML through the YAML AST. Both enforce 256 KiB input, depth 64, and 50,000 nodes. YAML aliases, parser warnings, duplicate keys, unknown tags, non-string keys, and unsupported scalars fail before a namespace binding changes.
 
-`schemas/extension-manifest.schema.json` is the normative JSON Schema. `formatVersion` is `1` and
-must change when an incompatible manifest shape is introduced.
+Canonical JSON recursively sorts object keys by Unicode code point. YAML uses the same ordering, quotes string scalars, and only leaves identifier-like keys unquoted.
 
-The v1 contract contains:
+## Paths and iteration
 
-- the TurboWarp extension ID;
-- each block opcode and block type;
-- each argument ID, argument type, and optional menu reference;
-- each menu ID and whether it accepts reporter blocks.
+`src/core.ts` converts restricted string paths to typed key/index segments and implements immutable get, has, set, delete, keys, length, and iteration entry generation. Loop entry snapshots are deterministic. Active loop frames are held in a separate `WeakMap` keyed by TurboWarp thread; nested loops form a stack.
 
-Blocks, arguments, and menus are sorted by their identifiers before serialization. Text,
-descriptions, default values, and static menu items are intentionally excluded because they do not
-identify saved-project API references. A compatibility checker can therefore distinguish API
-changes from documentation or localization changes.
+## Compiler manifest v3
 
-## Drift detection
+The manifest declares a named reference with target scope, lifetime until project stop, and `jsonValue` contents. Each opcode provides arguments, result type, effect (`pure`, `state`, or `control`), possible errors, and its IR v2 operation. Server adapters must provide an equivalent target-local slot environment and reject unsupported manifest versions.
 
-`dist/` is committed as a release artifact. `npm run check:dist` rebuilds both files and fails when
-Git reports any modified, deleted, or untracked file below `dist/`. This catches manifest and bundle
-drift in local checks and CI.
+`tests/fixtures/semantic-parity.json` is the portable browser/server contract for namespace, codec, path, result, and error semantics.
