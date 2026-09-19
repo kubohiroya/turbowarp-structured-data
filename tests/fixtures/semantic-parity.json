@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "manifestFormatVersion": 3,
+  "dataReference": {"kind": "named", "scope": "target", "lifetime": "untilProjectStop"},
+  "cases": [
+    {"name": "parse canonical JSON", "format": "json", "text": "{\"z\":0,\"a\":{\"d\":4,\"b\":2}}", "dataName": "document", "expectedJson": "{\"a\":{\"b\":2,\"d\":4},\"z\":0}"},
+    {"name": "parse YAML", "format": "yaml", "text": "name: sensor\nenabled: true", "dataName": "document", "expectedJson": "{\"enabled\":true,\"name\":\"sensor\"}"},
+    {"name": "typed path update", "format": "json", "text": "{\"users\":[{\"name\":\"Ada\"}]}", "dataName": "document", "path": "$.users[0].name", "normalizedPath": [{"kind": "key", "value": "users"}, {"kind": "index", "value": 0}, {"kind": "key", "value": "name"}], "setJson": "\"Grace\"", "expectedJson": "{\"users\":[{\"name\":\"Grace\"}]}"},
+    {"name": "invalid YAML", "format": "yaml", "text": "base: &x [1]\ncopy: *x", "dataName": "document", "error": "INVALID_YAML"}
+  ]
+}

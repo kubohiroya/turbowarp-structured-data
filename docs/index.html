@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Example Extension documentation</title>
+  <title>Structured Data documentation</title>
   <style>
     body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:900px;margin:0 auto;padding:2rem;line-height:1.6;color:#222}
     code{background:#f3f3f3;padding:.1em .3em;border-radius:.25em}
@@ -11,16 +11,14 @@
   </style>
 </head>
 <body>
-  <h1>Example Extension</h1>
-  <p>This is the English user documentation published with the TurboWarp Extension Template.</p>
+  <h1>Structured Data</h1>
+  <p>Named structured data with safe JSON/YAML codecs and deterministic path operations.</p>
 
   <h2>Blocks</h2>
-  <h3><code>hello [NAME]</code></h3>
-  <p>Returns a localized greeting for the supplied name.</p>
+  <p>Parse JSON or YAML into a target-local name, update it with restricted paths, iterate with an explicit bound, and render it back to JSON or YAML.</p>
 
-  <h2>Template requirement</h2>
-  <p>Repositories created from this template should replace this page with English documentation for their extension and keep the GitHub Pages URL in <code>extensionConfig.docsURI</code>.</p>
-  <p>They should also replace the example <code>blockIconURI</code> with a meaningful, self-contained SVG icon encoded as <code>data:image/svg+xml;base64,...</code>.</p>
+  <h2>Enable the MVP</h2>
+  <p>Set <code>globalThis.STRUCTURED_DATA_MVP = true</code> in the TurboWarp page, then load <code>structured-data.js</code> with <strong>Run extension without sandbox</strong> enabled. Start with <code>parse JSON ... as ...</code> or <code>parse YAML ... as ...</code>.</p>
 
   <h2>Development</h2>
   <p>See the repository README and architecture documentation for build, test, release, and compatibility details.</p>

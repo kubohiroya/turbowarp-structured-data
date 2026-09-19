@@ -1,29 +1,41 @@
 import type {Plugin} from 'vite';
 
-export const EXTENSION_MANIFEST_FORMAT_VERSION = 1 as const;
+export const EXTENSION_MANIFEST_FORMAT_VERSION = 3 as const;
 
 export interface ExtensionManifestArgument {
   id: string;
   type: string;
-  menu?: string;
+  normalizesTo?: 'pathSegments';
+  staticLiteral?: boolean;
+  minimum?: number;
+  maximum?: number;
 }
 
 export interface ExtensionManifestBlock {
   opcode: string;
   blockType: string;
   arguments: ExtensionManifestArgument[];
-}
-
-export interface ExtensionManifestMenu {
-  id: string;
-  acceptReporters: boolean;
+  resultType: string;
+  effect: 'pure' | 'immutable' | 'state' | 'control';
+  immutable: boolean;
+  errors: string[];
+  server: {supported: boolean; irOperation: string};
 }
 
 export interface ExtensionManifest {
   formatVersion: typeof EXTENSION_MANIFEST_FORMAT_VERSION;
   id: string;
+  pathSegmentType: {
+    kind: 'discriminatedUnion';
+    variants: Array<{kind: 'key' | 'index'; valueType: 'string' | 'nonNegativeInteger'}>;
+  };
+  dataReferenceType: {
+    kind: 'named';
+    scope: 'target';
+    lifetime: 'untilProjectStop';
+    valueType: 'jsonValue';
+  };
   blocks: ExtensionManifestBlock[];
-  menus: ExtensionManifestMenu[];
 }
 
 export interface ExtensionManifestPluginOptions {
@@ -36,30 +48,36 @@ export function createExtensionManifest(id: string, definitions: unknown): Exten
   if (!/^[a-z0-9]+$/.test(id)) {
     throw new TypeError('Extension manifest ID must contain only lowercase letters and numbers.');
   }
-
   const source = requireRecord(definitions, 'Block definitions');
-  const sourceBlocks = source.blocks;
-  if (!Array.isArray(sourceBlocks)) {
+  if (!Array.isArray(source.blocks)) {
     throw new TypeError('Block definitions must contain a blocks array.');
   }
-
-  const menus = normalizeMenus(source.menus);
-  const menuIds = new Set(menus.map((menu) => menu.id));
   const seenOpcodes = new Set<string>();
-  const blocks = sourceBlocks.map((block, index) => {
-    const normalized = normalizeBlock(block, index, menuIds);
+  const blocks = source.blocks.map((block, index) => {
+    const normalized = normalizeBlock(block, index);
     if (seenOpcodes.has(normalized.opcode)) {
       throw new TypeError(`Duplicate block opcode: ${normalized.opcode}`);
     }
     seenOpcodes.add(normalized.opcode);
     return normalized;
   });
-
   return {
     formatVersion: EXTENSION_MANIFEST_FORMAT_VERSION,
     id,
-    blocks: blocks.sort((left, right) => compareIds(left.opcode, right.opcode)),
-    menus
+    pathSegmentType: {
+      kind: 'discriminatedUnion',
+      variants: [
+        {kind: 'key', valueType: 'string'},
+        {kind: 'index', valueType: 'nonNegativeInteger'}
+      ]
+    },
+    dataReferenceType: {
+      kind: 'named',
+      scope: 'target',
+      lifetime: 'untilProjectStop',
+      valueType: 'jsonValue'
+    },
+    blocks: blocks.sort((left, right) => compareIds(left.opcode, right.opcode))
   };
 }
 
@@ -82,50 +100,53 @@ export function extensionManifestPlugin(options: ExtensionManifestPluginOptions)
   };
 }
 
-function normalizeBlock(
-  value: unknown,
-  index: number,
-  menuIds: ReadonlySet<string>
-): ExtensionManifestBlock {
+function normalizeBlock(value: unknown, index: number): ExtensionManifestBlock {
   const block = requireRecord(value, `Block at index ${index}`);
   const opcode = requireNonEmptyString(block.opcode, `Block at index ${index} opcode`);
-  const blockType = requireNonEmptyString(block.blockType, `Block ${opcode} blockType`);
-  const sourceArguments = block.arguments ?? {};
-  const argumentRecord = requireRecord(sourceArguments, `Block ${opcode} arguments`);
-  const argumentsList = Object.entries(argumentRecord).map(([argumentId, argument]) => {
-    requireNonEmptyString(argumentId, `Block ${opcode} argument ID`);
-    const definition = requireRecord(argument, `Block ${opcode} argument ${argumentId}`);
-    const type = requireNonEmptyString(
-      definition.type,
-      `Block ${opcode} argument ${argumentId} type`
-    );
-    const menu = definition.menu;
-    if (menu !== undefined && (typeof menu !== 'string' || !menuIds.has(menu))) {
-      throw new TypeError(`Block ${opcode} argument ${argumentId} references unknown menu: ${menu}`);
+  const argumentRecord = requireRecord(block.arguments ?? {}, `Block ${opcode} arguments`);
+  const argumentsList = Object.entries(argumentRecord).map(([id, value]) => {
+    const argument = requireRecord(value, `Block ${opcode} argument ${id}`);
+    const result: ExtensionManifestArgument = {
+      id: requireNonEmptyString(id, `Block ${opcode} argument ID`),
+      type: requireNonEmptyString(argument.type, `Block ${opcode} argument ${id} type`)
+    };
+    if (argument.normalizesTo !== undefined) {
+      if (argument.normalizesTo !== 'pathSegments') {
+        throw new TypeError(`Block ${opcode} argument ${id} has an unknown normalized type.`);
+      }
+      result.normalizesTo = argument.normalizesTo;
     }
-    return menu === undefined ? {id: argumentId, type} : {id: argumentId, type, menu};
+    if (argument.staticLiteral !== undefined) result.staticLiteral = requireBoolean(argument.staticLiteral, `${opcode}.${id}.staticLiteral`);
+    if (argument.minimum !== undefined) result.minimum = requireNumber(argument.minimum, `${opcode}.${id}.minimum`);
+    if (argument.maximum !== undefined) result.maximum = requireNumber(argument.maximum, `${opcode}.${id}.maximum`);
+    return result;
   });
-
+  const server = requireRecord(block.server, `Block ${opcode} server contract`);
+  const effect = block.effect;
+  if (
+    effect !== 'pure' &&
+    effect !== 'immutable' &&
+    effect !== 'state' &&
+    effect !== 'control'
+  ) {
+    throw new TypeError(`Block ${opcode} must define a supported effect.`);
+  }
+  if (!Array.isArray(block.errors) || !block.errors.every((code) => typeof code === 'string')) {
+    throw new TypeError(`Block ${opcode} errors must be an array of strings.`);
+  }
   return {
     opcode,
-    blockType,
-    arguments: argumentsList.sort((left, right) => compareIds(left.id, right.id))
+    blockType: requireNonEmptyString(block.blockType, `Block ${opcode} blockType`),
+    arguments: argumentsList.sort((left, right) => compareIds(left.id, right.id)),
+    resultType: requireNonEmptyString(block.resultType, `Block ${opcode} resultType`),
+    effect,
+    immutable: requireBoolean(block.immutable, `Block ${opcode} immutable`),
+    errors: [...block.errors],
+    server: {
+      supported: requireBoolean(server.supported, `Block ${opcode} server.supported`),
+      irOperation: requireNonEmptyString(server.irOperation, `Block ${opcode} server.irOperation`)
+    }
   };
-}
-
-function normalizeMenus(value: unknown): ExtensionManifestMenu[] {
-  const menuRecord = requireRecord(value ?? {}, 'Block definition menus');
-  return Object.entries(menuRecord)
-    .map(([id, menu]) => {
-      requireNonEmptyString(id, 'Menu ID');
-      const definition = requireRecord(menu, `Menu ${id}`);
-      const acceptReporters = definition.acceptReporters ?? false;
-      if (typeof acceptReporters !== 'boolean') {
-        throw new TypeError(`Menu ${id} acceptReporters must be a boolean.`);
-      }
-      return {id, acceptReporters};
-    })
-    .sort((left, right) => compareIds(left.id, right.id));
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
@@ -136,14 +157,20 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
 }
 
 function requireNonEmptyString(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new TypeError(`${label} must be a non-empty string.`);
-  }
+  if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${label} must be a non-empty string.`);
+  return value;
+}
+
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new TypeError(`${label} must be a boolean.`);
+  return value;
+}
+
+function requireNumber(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new TypeError(`${label} must be a finite number.`);
   return value;
 }
 
 function compareIds(left: string, right: string): number {
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
+  return left < right ? -1 : left > right ? 1 : 0;
 }

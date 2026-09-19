@@ -7,13 +7,20 @@ settings:
 importers:
 
   .:
+    dependencies:
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@kubohiroya/turbowarp-named-data':
+        specifier: link:../turbowarp-named-data
+        version: link:../turbowarp-named-data
       '@kubohiroya/vite-plugin-turbowarp-extension':
         specifier: 0.3.0
-        version: 0.3.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 0.3.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
@@ -31,10 +38,10 @@ importers:
         version: 8.66.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       vite:
         specifier: ^8.2.2
-        version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
       vitest:
         specifier: ^5.0.0
-        version: 5.0.0(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.0(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
 packages:
 
@@ -1039,6 +1046,11 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -1194,10 +1206,10 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))':
+  '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       acorn: 8.18.0
-      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
   '@oxc-project/types@0.148.0': {}
 
@@ -1354,14 +1366,14 @@ snapshots:
       '@typescript-eslint/types': 8.66.0
       eslint-visitor-keys: 5.0.1
 
-  '@vitest/mocker@5.0.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))':
+  '@vitest/mocker@5.0.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.0
       estree-walker: 3.0.3
       magic-string: 1.2.3
     optionalDependencies:
-      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
   '@vitest/spy@5.0.0': {}
 
@@ -1814,7 +1826,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0):
+  vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
@@ -1826,11 +1838,12 @@ snapshots:
       esbuild: 0.28.1
       fsevents: 2.3.3
       jiti: 2.7.0
+      yaml: 2.9.1
 
-  vitest@5.0.0(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)):
+  vitest@5.0.0(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))
+      '@vitest/mocker': 5.0.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -1841,7 +1854,7 @@ snapshots:
       tinybench: 6.1.4
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.13.3
@@ -1858,5 +1871,7 @@ snapshots:
       stackback: 0.0.2
 
   word-wrap@1.2.5: {}
+
+  yaml@2.9.1: {}
 
   yocto-queue@0.1.0: {}

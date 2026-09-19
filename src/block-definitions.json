@@ -1,14 +1,98 @@
 {
-  "extensionName": "TurboWarp-Example-Extension",
+  "extensionName": "Structured Data",
   "blocks": [
     {
-      "opcode": "hello",
-      "blockType": "REPORTER",
-      "text": "hello [NAME]",
-      "description": "Returns a localized greeting for the supplied name.",
-      "arguments": {
-        "NAME": {"type": "STRING", "defaultValue": "world"}
-      }
+      "opcode": "parseJson", "blockType": "COMMAND", "text": "parse JSON [TEXT] as [NAME]", "description": "Parse JSON text into the target-local structured data namespace.",
+      "arguments": {"TEXT": {"type": "STRING", "defaultValue": "{\"name\":\"TurboWarp\"}"}, "NAME": {"type": "STRING", "defaultValue": "data"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_JSON", "INVALID_NAME", "PARSE_LIMIT_EXCEEDED"],
+      "server": {"supported": true, "irOperation": "structuredData.parseJson"}
+    },
+    {
+      "opcode": "parseYaml", "blockType": "COMMAND", "text": "parse YAML [TEXT] as [NAME]", "description": "Parse safe YAML text into the target-local structured data namespace.",
+      "arguments": {"TEXT": {"type": "STRING", "defaultValue": "name: TurboWarp"}, "NAME": {"type": "STRING", "defaultValue": "data"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_YAML", "INVALID_NAME", "PARSE_LIMIT_EXCEEDED"],
+      "server": {"supported": true, "irOperation": "structuredData.parseYaml"}
+    },
+    {
+      "opcode": "toJson", "blockType": "REPORTER", "text": "to JSON [NAME]", "description": "Render named structured data as canonical JSON.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}},
+      "resultType": "jsonText", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND"],
+      "server": {"supported": true, "irOperation": "structuredData.toJson"}
+    },
+    {
+      "opcode": "toYaml", "blockType": "REPORTER", "text": "to YAML [NAME]", "description": "Render named structured data as deterministic YAML.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}},
+      "resultType": "yamlText", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND"],
+      "server": {"supported": true, "irOperation": "structuredData.toYaml"}
+    },
+    {
+      "opcode": "hasStructuredData", "blockType": "BOOLEAN", "text": "structured data [NAME] exists?", "description": "Report whether the current target has named structured data.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}},
+      "resultType": "boolean", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME"],
+      "server": {"supported": true, "irOperation": "structuredData.hasData"}
+    },
+    {
+      "opcode": "deleteStructuredData", "blockType": "COMMAND", "text": "delete structured data [NAME]", "description": "Delete named structured data from the current target.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND"],
+      "server": {"supported": true, "irOperation": "structuredData.deleteData"}
+    },
+    {
+      "opcode": "getJsonAtPath", "blockType": "REPORTER", "text": "get JSON from [NAME] at path [PATH]", "description": "Return a named value at a path as JSON.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$.name", "normalizesTo": "pathSegments"}},
+      "resultType": "jsonText", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE"],
+      "server": {"supported": true, "irOperation": "structuredData.get"}
+    },
+    {
+      "opcode": "hasPath", "blockType": "BOOLEAN", "text": "structured data [NAME] has path [PATH]?", "description": "Report whether a path exists in named structured data.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$.name", "normalizesTo": "pathSegments"}},
+      "resultType": "boolean", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "TYPE_MISMATCH"],
+      "server": {"supported": true, "irOperation": "structuredData.has"}
+    },
+    {
+      "opcode": "setJsonAtPath", "blockType": "COMMAND", "text": "set [NAME] at path [PATH] to JSON [VALUE]", "description": "Immutably update a named value and replace its binding.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$.name", "normalizesTo": "pathSegments"}, "VALUE": {"type": "STRING", "defaultValue": "\"Scratch\""}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_JSON", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE"],
+      "server": {"supported": true, "irOperation": "structuredData.set"}
+    },
+    {
+      "opcode": "deleteAtPath", "blockType": "COMMAND", "text": "delete path [PATH] from [NAME]", "description": "Immutably delete a path and replace its named binding.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$.name", "normalizesTo": "pathSegments"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE"],
+      "server": {"supported": true, "irOperation": "structuredData.delete"}
+    },
+    {
+      "opcode": "keysAtPath", "blockType": "REPORTER", "text": "keys in [NAME] at path [PATH]", "description": "Return sorted object keys as JSON.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$", "normalizesTo": "pathSegments"}},
+      "resultType": "jsonText", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE"],
+      "server": {"supported": true, "irOperation": "structuredData.keys"}
+    },
+    {
+      "opcode": "lengthAtPath", "blockType": "REPORTER", "text": "length of array in [NAME] at path [PATH]", "description": "Return the array length.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$", "normalizesTo": "pathSegments"}},
+      "resultType": "number", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE"],
+      "server": {"supported": true, "irOperation": "structuredData.length"}
+    },
+    {
+      "opcode": "forEachAtPath", "blockType": "LOOP", "text": "for each in [NAME] at path [PATH] max [MAX]", "description": "Iterate named data deterministically with a static maximum.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$", "normalizesTo": "pathSegments"}, "MAX": {"type": "NUMBER", "defaultValue": 100, "staticLiteral": true, "minimum": 1, "maximum": 1000}},
+      "resultType": "void", "effect": "control", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "ITERATION_LIMIT_EXCEEDED"],
+      "server": {"supported": true, "irOperation": "structuredData.forEach"}
+    },
+    {
+      "opcode": "currentKey", "blockType": "REPORTER", "text": "current key", "description": "Return the current object key or array index string.",
+      "arguments": {}, "resultType": "string", "effect": "control", "immutable": true, "errors": ["ITERATION_CONTEXT_REQUIRED"],
+      "server": {"supported": true, "irOperation": "structuredData.currentKey"}
+    },
+    {
+      "opcode": "currentIndex", "blockType": "REPORTER", "text": "current index", "description": "Return the zero-based iteration number.",
+      "arguments": {}, "resultType": "number", "effect": "control", "immutable": true, "errors": ["ITERATION_CONTEXT_REQUIRED"],
+      "server": {"supported": true, "irOperation": "structuredData.currentIndex"}
+    },
+    {
+      "opcode": "currentValueJson", "blockType": "REPORTER", "text": "current value JSON", "description": "Return the current iteration value as JSON.",
+      "arguments": {}, "resultType": "jsonText", "effect": "control", "immutable": true, "errors": ["ITERATION_CONTEXT_REQUIRED"],
+      "server": {"supported": true, "irOperation": "structuredData.currentValue"}
     }
   ]
 }

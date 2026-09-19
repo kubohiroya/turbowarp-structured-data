@@ -1,48 +1,102 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/kubohiroya/turbowarp-extension-template/main/schemas/extension-manifest.schema.json",
-  "title": "TurboWarp Extension API Manifest",
+  "$id": "https://raw.githubusercontent.com/kubohiroya/turbowarp-structured-data/main/schemas/extension-manifest.schema.json",
+  "title": "TurboWarp Structured Data Compiler Manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["formatVersion", "id", "blocks", "menus"],
+  "required": ["formatVersion", "id", "pathSegmentType", "dataReferenceType", "blocks"],
   "properties": {
-    "formatVersion": {"const": 1},
+    "formatVersion": {"const": 3},
     "id": {"type": "string", "pattern": "^[a-z0-9]+$"},
-    "blocks": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["opcode", "blockType", "arguments"],
-        "properties": {
-          "opcode": {"type": "string", "minLength": 1},
-          "blockType": {"type": "string", "minLength": 1},
-          "arguments": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["id", "type"],
-              "properties": {
-                "id": {"type": "string", "minLength": 1},
-                "type": {"type": "string", "minLength": 1},
-                "menu": {"type": "string", "minLength": 1}
-              }
-            }
-          }
+    "pathSegmentType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "variants"],
+      "properties": {
+        "kind": {"const": "discriminatedUnion"},
+        "variants": {
+          "type": "array",
+          "prefixItems": [
+            {"$ref": "#/$defs/keyPathSegment"},
+            {"$ref": "#/$defs/indexPathSegment"}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         }
       }
     },
-    "menus": {
+    "dataReferenceType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "scope", "lifetime", "valueType"],
+      "properties": {
+        "kind": {"const": "named"},
+        "scope": {"const": "target"},
+        "lifetime": {"const": "untilProjectStop"},
+        "valueType": {"const": "jsonValue"}
+      }
+    },
+    "blocks": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "acceptReporters"],
-        "properties": {
-          "id": {"type": "string", "minLength": 1},
-          "acceptReporters": {"type": "boolean"}
-        }
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/block"}
+    }
+  },
+  "$defs": {
+    "keyPathSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "valueType"],
+      "properties": {"kind": {"const": "key"}, "valueType": {"const": "string"}}
+    },
+    "indexPathSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "valueType"],
+      "properties": {"kind": {"const": "index"}, "valueType": {"const": "nonNegativeInteger"}}
+    },
+    "argument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"enum": ["STRING", "NUMBER", "BOOLEAN"]},
+        "normalizesTo": {"const": "pathSegments"},
+        "staticLiteral": {"type": "boolean"},
+        "minimum": {"type": "number"},
+        "maximum": {"type": "number"}
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported", "irOperation"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "irOperation": {"type": "string", "pattern": "^structuredData\\.[A-Za-z][A-Za-z0-9]*$"}
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opcode", "blockType", "arguments", "resultType", "effect", "immutable", "errors", "server"],
+      "properties": {
+        "opcode": {"type": "string", "minLength": 1},
+        "blockType": {"enum": ["COMMAND", "REPORTER", "BOOLEAN", "LOOP"]},
+        "arguments": {"type": "array", "items": {"$ref": "#/$defs/argument"}},
+        "resultType": {"enum": ["json", "jsonText", "yamlText", "boolean", "number", "string", "void"]},
+        "effect": {"enum": ["pure", "immutable", "state", "control"]},
+        "immutable": {"type": "boolean"},
+        "errors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["INVALID_JSON", "INVALID_YAML", "INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "ITERATION_LIMIT_EXCEEDED", "ITERATION_CONTEXT_REQUIRED", "PARSE_LIMIT_EXCEEDED"]
+          }
+        },
+        "server": {"$ref": "#/$defs/server"}
       }
     }
   }
