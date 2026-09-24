@@ -15,6 +15,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@kubohiroya/turbowarp-extension-manifest':
+        specifier: 0.3.0
+        version: 0.3.0
       '@kubohiroya/turbowarp-named-data':
         specifier: 0.1.0
         version: 0.1.0
@@ -268,6 +271,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kubohiroya/turbowarp-extension-manifest@0.3.0':
+    resolution: {integrity: sha512-tCGXybssYVu8lChTSczybu85Sb3pH0NkwbQ19Y1x4Zb9EN3FE/12J0UZayp09CXnA5W3Q58oIUJi2TBl13+SGw==}
+    engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-named-data@0.1.0':
     resolution: {integrity: sha512-VNbV2Lr7MA1RhcJNfQjmqCDuQmqmuS223b+kYIHkZGQ8ZvdnxTGxs5vo3foY+nZqnTQEnJ6QrOlpsw/taFCOLg==}
@@ -1209,6 +1216,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@kubohiroya/turbowarp-extension-manifest@0.3.0': {}
 
   '@kubohiroya/turbowarp-named-data@0.1.0': {}
 

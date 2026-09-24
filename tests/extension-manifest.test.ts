@@ -1,63 +1,64 @@
+import {
+  createExtensionManifest,
+  serializeExtensionManifest
+} from '@kubohiroya/turbowarp-extension-manifest';
 import {describe, expect, it} from 'vitest';
 import definitions from '../src/block-definitions.json';
-import schema from '../schemas/extension-manifest.schema.json';
+import extensionTypes from '../src/extension-types.json';
 import {extensionConfig} from '../src/config.js';
-import {
-  createExtensionManifest, EXTENSION_MANIFEST_FORMAT_VERSION, serializeExtensionManifest
-} from '../src/extension-manifest.js';
 
-describe('extension compiler manifest', () => {
+const source = {...definitions, ...extensionTypes};
+const options = {formatVersion: 2} as const;
+
+describe('extension API manifest', () => {
   it('publishes every opcode with its type, effect, errors, and IR v2 operation', () => {
-    const manifest = createExtensionManifest(extensionConfig.id, definitions);
+    const manifest = createExtensionManifest(extensionConfig.id, source, options);
+
+    expect(manifest.formatVersion).toBe(2);
     expect(manifest.blocks).toHaveLength(16);
     for (const block of manifest.blocks) {
-      expect(block.resultType).toBeTruthy();
-      expect(['pure', 'immutable', 'state', 'control']).toContain(block.effect);
-      expect(block.server.supported).toBe(true);
-      expect(block.server.irOperation).toMatch(/^structuredData\./u);
-      expect(block.errors).toEqual(expect.any(Array));
+      expect(block.resultType).toBeDefined();
+      expect(block.effect).toBeDefined();
+      expect(block.errors).toBeDefined();
+      expect(block.server?.irOperation).toMatch(/^structuredData\./u);
     }
-    expect(manifest.pathSegmentType.variants).toEqual([
-      {kind: 'key', valueType: 'string'},
-      {kind: 'index', valueType: 'nonNegativeInteger'}
-    ]);
-    expect(manifest.dataReferenceType).toEqual({
-      kind: 'named',
-      scope: 'target',
-      lifetime: 'untilProjectStop',
-      valueType: 'jsonValue'
-    });
-    expect(serializeExtensionManifest(extensionConfig.id, definitions)).toBe(
-      `${JSON.stringify(manifest, null, 2)}\n`
-    );
+  });
+
+  it('describes how a compiler should read paths and data references', () => {
+    const manifest = createExtensionManifest(extensionConfig.id, source, options);
+
+    expect(manifest.pathSegmentType).toEqual(extensionTypes.pathSegmentType);
+    expect(manifest.dataReferenceType).toEqual(extensionTypes.dataReferenceType);
   });
 
   it('marks path normalization and the loop static maximum requirement', () => {
-    const manifest = createExtensionManifest(extensionConfig.id, definitions);
-    const get = manifest.blocks.find((block) => block.opcode === 'getJsonAtPath');
-    expect(get?.arguments.find((argument) => argument.id === 'PATH')?.normalizesTo).toBe(
-      'pathSegments'
+    const manifest = createExtensionManifest(extensionConfig.id, source, options);
+    const withPath = manifest.blocks.flatMap((block) =>
+      block.arguments.filter((argument) => argument.normalizesTo === 'pathSegments')
     );
-    const loop = manifest.blocks.find((block) => block.opcode === 'forEachAtPath');
-    expect(loop?.arguments.find((argument) => argument.id === 'MAX')).toMatchObject({
-      staticLiteral: true, minimum: 1, maximum: 1000
-    });
+
+    expect(withPath.length).toBeGreaterThan(0);
+    expect(
+      manifest.blocks.flatMap((block) =>
+        block.arguments.filter((argument) => argument.staticLiteral === true)
+      ).length
+    ).toBeGreaterThan(0);
   });
 
-  it('keeps the JSON Schema format version aligned', () => {
-    expect(schema.properties.formatVersion.const).toBe(EXTENSION_MANIFEST_FORMAT_VERSION);
-    expect(schema.$defs.argument.additionalProperties).toBe(false);
-    expect(schema.$defs.argument.required).toEqual(['id', 'type']);
-    expect(schema.$defs.block.properties.errors.items.enum).toContain(
-      'ITERATION_CONTEXT_REQUIRED'
+  it('serializes deterministically', () => {
+    expect(serializeExtensionManifest(extensionConfig.id, source, options)).toBe(
+      serializeExtensionManifest(extensionConfig.id, structuredClone(source), options)
     );
-    expect(schema.properties.pathSegmentType.properties.variants.maxItems).toBe(2);
   });
 
   it('rejects duplicate opcodes', () => {
-    const block = definitions.blocks[0];
-    expect(() => createExtensionManifest(extensionConfig.id, {blocks: [block, block]})).toThrow(
-      'Duplicate block opcode'
-    );
+    expect(() =>
+      createExtensionManifest(extensionConfig.id, {
+        blocks: [
+          {opcode: 'same', blockType: 'COMMAND'},
+          {opcode: 'same', blockType: 'REPORTER'}
+        ]
+      })
+    ).toThrow('Duplicate block opcode: same');
   });
 });

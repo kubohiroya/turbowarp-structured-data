@@ -1,0 +1,15 @@
+{
+  "pathSegmentType": {
+    "kind": "discriminatedUnion",
+    "variants": [
+      {"kind": "key", "valueType": "string"},
+      {"kind": "index", "valueType": "nonNegativeInteger"}
+    ]
+  },
+  "dataReferenceType": {
+    "kind": "named",
+    "scope": "target",
+    "lifetime": "untilProjectStop",
+    "valueType": "jsonValue"
+  }
+}

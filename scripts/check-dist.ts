@@ -20,7 +20,7 @@ if (JSON.stringify(files) !== JSON.stringify(expectedFiles)) {
 }
 
 const manifest = JSON.parse(await readFile(new URL('extension-manifest.json', distUrl), 'utf8')) as Manifest;
-if (manifest.formatVersion !== 3 || manifest.id !== 'kubohiroyastructureddata') {
+if (manifest.formatVersion !== 2 || manifest.id !== 'kubohiroyastructureddata') {
   throw new Error('dist/extension-manifest.json has unexpected identity or format version.');
 }
 if (manifest.blocks.length !== 16 || new Set(manifest.blocks.map((block) => block.opcode)).size !== 16) {

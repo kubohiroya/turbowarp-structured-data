@@ -1,5 +1,5 @@
 {
-  "formatVersion": 3,
+  "formatVersion": 2,
   "id": "kubohiroyastructureddata",
   "pathSegmentType": {
     "kind": "discriminatedUnion",
@@ -422,5 +422,6 @@
         "irOperation": "structuredData.toYaml"
       }
     }
-  ]
+  ],
+  "menus": []
 }
