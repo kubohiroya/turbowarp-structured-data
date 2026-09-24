@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": "Hiroya Kubo <hiroya@cuc.ac.jp>",
   "license": "MPL-2.0",
