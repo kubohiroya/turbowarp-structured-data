@@ -1,3 +1,5 @@
+import {sourceEditorDefinitions} from './editor-schema.js';
+import {registerSourceEditors} from './source-editor.js';
 import definitions from './block-definitions.json';
 import {
   bindNamedDataRegistryLifecycle,
@@ -72,6 +74,7 @@ const blockDefinitions = definitions.blocks as readonly BlockDefinition[];
 
 export class StructuredDataExtension implements TurboWarpExtension {
   private readonly enabled: boolean;
+  private readonly unregisterSourceEditors: () => void;
   private registries = new WeakMap<object, Map<string, StructuredDataBinding>>();
   private iterationStacks = new WeakMap<object, ActiveIteration[]>();
   private nextRevision = 1;
@@ -85,6 +88,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
     namedDataEnabled = isNamedDataRegistryMvpEnabled()
   ) {
     this.enabled = enabled;
+    this.unregisterSourceEditors = registerSourceEditors(Scratch, enabled ? sourceEditorDefinitions : []);
     if (namedDataEnabled) {
       this.namedDataProvider = new StructuredDataNamedDataProvider({
         get: (target, name) => this.registries.get(target)?.get(name)
@@ -117,6 +121,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
   }
 
   public async dispose(): Promise<void> {
+    this.unregisterSourceEditors();
     await this.namedDataRegistration?.unregister();
     this.unbindNamedDataRegistryLifecycle?.();
   }

@@ -20,6 +20,14 @@ export default defineConfig({
       // The extension-level types are read only here, so they stay out of the extension bundle.
       definitions: {...definitions, ...extensionTypes},
       formatVersion: 2
-    })
+    }),
+    {
+      name: 'stable-generated-region-comments',
+      renderChunk(code) {
+        // Generated module paths depend on the package store and checkout location.
+        // Preserve license comments and executable code while omitting region markers.
+        return {code: code.replace(/^[\t ]*\/\/#(?:end)?region[^\r\n]*(?:\r?\n|$)/gm, ''), map: null};
+      }
+    }
   ]
 });
