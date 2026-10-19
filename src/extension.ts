@@ -1,3 +1,4 @@
+import {fixedInputEditorDefinitions, registerFixedInputEditors} from './fixed-input-editors.js';
 import {sourceEditorDefinitions} from './editor-schema.js';
 import {registerSourceEditors} from './source-editor.js';
 import definitions from './block-definitions.json';
@@ -74,7 +75,10 @@ const blockDefinitions = definitions.blocks as readonly BlockDefinition[];
 
 export class StructuredDataExtension implements TurboWarpExtension {
   private readonly enabled: boolean;
+  private disposed = false;
+  private readonly releaseRuntimeListeners: () => void;
   private readonly unregisterSourceEditors: () => void;
+  private readonly unregisterFixedInputEditors: () => void;
   private registries = new WeakMap<object, Map<string, StructuredDataBinding>>();
   private iterationStacks = new WeakMap<object, ActiveIteration[]>();
   private nextRevision = 1;
@@ -89,6 +93,17 @@ export class StructuredDataExtension implements TurboWarpExtension {
   ) {
     this.enabled = enabled;
     this.unregisterSourceEditors = registerSourceEditors(Scratch, enabled ? sourceEditorDefinitions : []);
+    const runtime = Scratch.vm?.runtime;
+    const onDispose = () => {void this.dispose();};
+    const onStop = () => this.clearRuntimeState();
+    this.releaseRuntimeListeners = () => {
+      runtime?.off?.('RUNTIME_DISPOSED', onDispose);
+      runtime?.off?.('PROJECT_STOP_ALL', onStop);
+    };
+    let unregisterFixed = () => {};
+    try {
+      unregisterFixed = registerFixedInputEditors(Scratch, enabled ? fixedInputEditorDefinitions : []);
+      this.unregisterFixedInputEditors = unregisterFixed;
     if (namedDataEnabled) {
       this.namedDataProvider = new StructuredDataNamedDataProvider({
         get: (target, name) => this.registries.get(target)?.get(name)
@@ -104,12 +119,18 @@ export class StructuredDataExtension implements TurboWarpExtension {
           runtime,
           this.namedDataRegistry
         );
-        runtime.on?.('RUNTIME_DISPOSED', () => {
-          void this.dispose();
-        });
+        runtime.on?.('RUNTIME_DISPOSED', onDispose);
       }
     }
-    Scratch.vm?.runtime?.on?.('PROJECT_STOP_ALL', () => this.clearRuntimeState());
+    runtime?.on?.('PROJECT_STOP_ALL', onStop);
+    } catch (error) {
+      this.releaseRuntimeListeners();
+      unregisterFixed();
+      this.unregisterSourceEditors();
+      this.unbindNamedDataRegistryLifecycle?.();
+      void this.namedDataRegistration?.unregister().catch(() => {});
+      throw error;
+    }
   }
 
   public getNamedDataProvider(): StructuredDataNamedDataProvider | undefined {
@@ -121,6 +142,10 @@ export class StructuredDataExtension implements TurboWarpExtension {
   }
 
   public async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.releaseRuntimeListeners();
+    this.unregisterFixedInputEditors();
     this.unregisterSourceEditors();
     await this.namedDataRegistration?.unregister();
     this.unbindNamedDataRegistryLifecycle?.();
