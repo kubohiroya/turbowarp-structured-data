@@ -23,7 +23,7 @@ JSON and YAML input is limited to 256 KiB, nesting depth 64, and 50,000 values. 
 ## Installation
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.6.0
+pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.6.1
 ```
 
 ## Quick start
