@@ -28,8 +28,8 @@ describe('StructuredDataExtension', () => {
   });
 
   it('registers the integrated namespace, codec, path, and loop blocks', () => {
-    expect((new StructuredDataExtension(false).getInfo() as {blocks: unknown[]}).blocks).toEqual([]);
-    const info = new StructuredDataExtension(true).getInfo() as {
+    expect((new StructuredDataExtension(Scratch, false).getInfo() as {blocks: unknown[]}).blocks).toEqual([]);
+    const info = new StructuredDataExtension(Scratch, true).getInfo() as {
       name: string;
       blocks: Array<{opcode: string}>;
     };
@@ -43,7 +43,7 @@ describe('StructuredDataExtension', () => {
   });
 
   it('parses JSON and YAML into a target-local named namespace', () => {
-    const extension = new StructuredDataExtension(true);
+    const extension = new StructuredDataExtension(Scratch, true);
     const targetA = {};
     const targetB = {};
     const utilA = utility(targetA);
@@ -62,7 +62,7 @@ describe('StructuredDataExtension', () => {
   });
 
   it('updates named data immutably and deletes paths and bindings', () => {
-    const extension = new StructuredDataExtension(true);
+    const extension = new StructuredDataExtension(Scratch, true);
     const util = utility();
     extension.parseJson({TEXT: '{"items":[1,2],"name":"old"}', NAME: 'data'}, util);
     extension.setJsonAtPath({NAME: 'data', PATH: '$.name', VALUE: '"new"'}, util);
@@ -74,7 +74,7 @@ describe('StructuredDataExtension', () => {
   });
 
   it('clears every namespace when the project stops', () => {
-    const extension = new StructuredDataExtension(true);
+    const extension = new StructuredDataExtension(Scratch, true);
     const util = utility();
     extension.parseJson({TEXT: '{}', NAME: 'data'}, util);
     const on = Scratch.vm?.runtime?.on as ReturnType<typeof vi.fn>;
@@ -87,7 +87,7 @@ describe('StructuredDataExtension', () => {
   });
 
   it('iterates deterministically and isolates context by thread', () => {
-    const extension = new StructuredDataExtension(true);
+    const extension = new StructuredDataExtension(Scratch, true);
     const target = {};
     const threadA = {};
     const util = utility(target, threadA);
@@ -106,7 +106,7 @@ describe('StructuredDataExtension', () => {
   });
 
   it('reports invalid names, missing data, unsafe YAML, and iteration overflow', () => {
-    const extension = new StructuredDataExtension(true);
+    const extension = new StructuredDataExtension(Scratch, true);
     const util = utility();
     expect(() => extension.parseJson({TEXT: '{}', NAME: ' '}, util)).toThrowError(
       expect.objectContaining({code: 'INVALID_NAME'})

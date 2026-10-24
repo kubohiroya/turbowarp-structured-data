@@ -49,7 +49,7 @@ describe('structured named data provider contract', () => {
   it('is disabled by default and does not expose a provider while disabled', () => {
     expect(isNamedDataRegistryMvpEnabled({})).toBe(false);
     expect(isNamedDataRegistryMvpEnabled({NAMED_DATA_REGISTRY_MVP: true})).toBe(true);
-    expect(new StructuredDataExtension(true, false).getNamedDataProvider()).toBeUndefined();
+    expect(new StructuredDataExtension(Scratch, true, false).getNamedDataProvider()).toBeUndefined();
   });
 
   it('keeps schema reference resolution disabled by default', () => {
@@ -103,7 +103,7 @@ describe('structured named data provider contract', () => {
   });
 
   it('resolves canonical JSON and YAML as replayable UTF-8 bodies', () => {
-    const extension = new StructuredDataExtension(true, true);
+    const extension = new StructuredDataExtension(Scratch, true, true);
     const target = {};
     const util = utility(target);
     extension.parseJson({TEXT: '{"b":2,"a":1}', NAME: 'data'}, util);
@@ -141,7 +141,7 @@ describe('structured named data provider contract', () => {
   });
 
   it('isolates target-local bindings and exposes stable contract errors', () => {
-    const extension = new StructuredDataExtension(true, true);
+    const extension = new StructuredDataExtension(Scratch, true, true);
     const target = {};
     extension.parseJson({TEXT: '{}', NAME: 'data'}, utility(target));
     const provider = extension.getNamedDataProvider();
@@ -183,7 +183,7 @@ describe('structured named data provider contract', () => {
   });
 
   it('increments revision atomically, clears bindings on stop, and supports release', () => {
-    const extension = new StructuredDataExtension(true, true);
+    const extension = new StructuredDataExtension(Scratch, true, true);
     const target = {};
     const util = utility(target);
     const provider = extension.getNamedDataProvider();
@@ -211,7 +211,7 @@ describe('structured named data provider contract', () => {
   });
 
   it('registers persistently in the shared registry and survives project stop', async () => {
-    const extension = new StructuredDataExtension(true, true);
+    const extension = new StructuredDataExtension(Scratch, true, true);
     const registry = extension.getNamedDataRegistry();
     const target = {};
     const util = utility(target);

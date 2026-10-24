@@ -7056,14 +7056,15 @@
   var LOOP_STATE = "structuredDataLoopState";
   var blockDefinitions = block_definitions_default.blocks;
   var StructuredDataExtension = class {
-  	constructor(enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled()) {
+  	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled()) {
+  		this.scratch = scratch;
   		this.disposed = false;
   		this.registries = /* @__PURE__ */ new WeakMap();
   		this.iterationStacks = /* @__PURE__ */ new WeakMap();
   		this.nextRevision = 1;
   		this.enabled = enabled;
-  		this.unregisterSourceEditors = registerSourceEditors(Scratch, enabled ? sourceEditorDefinitions : []);
-  		const runtime = Scratch.vm?.runtime;
+  		this.unregisterSourceEditors = registerSourceEditors(this.scratch, enabled ? sourceEditorDefinitions : []);
+  		const runtime = this.scratch.vm?.runtime;
   		const onDispose = () => {
   			this.dispose();
   		};
@@ -7074,11 +7075,11 @@
   		};
   		let unregisterFixed = () => {};
   		try {
-  			unregisterFixed = registerFixedInputEditors(Scratch, enabled ? fixedInputEditorDefinitions : []);
+  			unregisterFixed = registerFixedInputEditors(this.scratch, enabled ? fixedInputEditorDefinitions : []);
   			this.unregisterFixedInputEditors = unregisterFixed;
   			if (namedDataEnabled) {
   				this.namedDataProvider = new StructuredDataNamedDataProvider({ get: (target, name) => this.registries.get(target)?.get(name) });
-  				const runtime = Scratch.vm?.runtime;
+  				const runtime = this.scratch.vm?.runtime;
   				if (runtime) {
   					this.namedDataRegistry = installNamedDataRegistry(runtime);
   					this.namedDataRegistration = this.namedDataRegistry.registerProvider(this.namedDataProvider, { lifetime: "persistent" });
@@ -7114,17 +7115,17 @@
   	getInfo() {
   		return {
   			id: extensionConfig.id,
-  			name: Scratch.translate(block_definitions_default.extensionName),
+  			name: this.scratch.translate(block_definitions_default.extensionName),
   			docsURI: extensionConfig.docsURI,
   			blockIconURI: extensionConfig.blockIconURI,
   			blocks: this.enabled ? blockDefinitions.map((block) => this.toScratchBlock(block)) : []
   		};
   	}
   	parseJson(args, util) {
-  		this.store(util.target, args.NAME, parseJsonDocument(Scratch.Cast.toString(args.TEXT)), "json");
+  		this.store(util.target, args.NAME, parseJsonDocument(this.scratch.Cast.toString(args.TEXT)), "json");
   	}
   	parseYaml(args, util) {
-  		this.store(util.target, args.NAME, parseYamlDocument(Scratch.Cast.toString(args.TEXT)), "yaml");
+  		this.store(util.target, args.NAME, parseYamlDocument(this.scratch.Cast.toString(args.TEXT)), "yaml");
   	}
   	toJson(args, util) {
   		return renderJsonDocument(this.requireData(util.target, args.NAME));
@@ -7148,7 +7149,7 @@
   	}
   	setJsonAtPath(args, util) {
   		const name = this.name(args.NAME);
-  		const updated = setAtPath(this.requireDataByName(util.target, name), this.path(args.PATH), parseJson(Scratch.Cast.toString(args.VALUE)));
+  		const updated = setAtPath(this.requireDataByName(util.target, name), this.path(args.PATH), parseJson(this.scratch.Cast.toString(args.VALUE)));
   		this.setBinding(util.target, name, updated);
   	}
   	deleteAtPath(args, util) {
@@ -7167,7 +7168,7 @@
   		const stack = this.stackFor(util.thread);
   		if (!state) {
   			state = {
-  				entries: iterationEntries(this.requireData(util.target, args.NAME), this.path(args.PATH), Scratch.Cast.toNumber(args.MAX)),
+  				entries: iterationEntries(this.requireData(util.target, args.NAME), this.path(args.PATH), this.scratch.Cast.toNumber(args.MAX)),
   				cursor: 0,
   				active: false
   			};
@@ -7229,7 +7230,7 @@
   		this.nextRevision += 1;
   	}
   	name(value) {
-  		const name = Scratch.Cast.toString(value).trim();
+  		const name = this.scratch.Cast.toString(value).trim();
   		if (name.length === 0) throw new StructuredDataError("INVALID_NAME", "Structured data name cannot be empty.");
   		return name;
   	}
@@ -7250,7 +7251,7 @@
   		return stack;
   	}
   	path(value) {
-  		return parsePath(Scratch.Cast.toString(value));
+  		return parsePath(this.scratch.Cast.toString(value));
   	}
   	clearRuntimeState() {
   		this.namedDataProvider?.clearSession();
@@ -7261,16 +7262,25 @@
   	toScratchBlock(block) {
   		return {
   			opcode: block.opcode,
-  			blockType: Scratch.BlockType[block.blockType],
-  			text: Scratch.translate(block.text),
+  			blockType: this.scratch.BlockType[block.blockType],
+  			text: this.scratch.translate(block.text),
   			arguments: Object.fromEntries(Object.entries(block.arguments).map(([name, argument]) => [name, {
-  				type: Scratch.ArgumentType[argument.type],
+  				type: this.scratch.ArgumentType[argument.type],
   				defaultValue: argument.defaultValue
   			}]))
   		};
   	}
   };
+  Object.freeze({
+  	formatVersion: 1,
+  	id: extensionConfig.id,
+  	unsandboxed: extensionConfig.unsandboxed ? "required" : "not-needed"
+  });
+  /** The caller supplies the member host and owns registration and lifetime. */
+  function createExtension(scratch) {
+  	return new StructuredDataExtension(scratch);
+  }
   if (extensionConfig.unsandboxed && !Scratch.extensions.unsandboxed) throw new Error(`${extensionConfig.name} must run unsandboxed.`);
-  Scratch.extensions.register(new StructuredDataExtension());
+  Scratch.extensions.register(createExtension(Scratch));
 
 })(Scratch);

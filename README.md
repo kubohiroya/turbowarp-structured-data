@@ -244,6 +244,48 @@ Return the current iteration value as JSON.
 
 `dist/extension-manifest.json` format version 3 declares the target-local named reference model, typed path segments, block argument/result types, effects, stable errors, and IR v2 operations. See [architecture](docs/architecture.md), the [JSON Schema](schemas/extension-manifest.schema.json), and [semantic parity fixtures](tests/fixtures/semantic-parity.json).
 
+## Integrated-build module API
+
+Building this source also produces a `./bundle-module` ESM entry and declarations
+in `lib-module/`. This entry is separate from the standalone JavaScript file.
+
+```ts
+import {bundleModuleMetadata, createExtension, type ScratchApi}
+  from '@kubohiroya/turbowarp-structured-data/bundle-module';
+
+export function createMember(memberScratch: ScratchApi) {
+  return createExtension(memberScratch);
+}
+```
+
+Importing the entry does not access global Scratch / window / document or create
+and register an extension. Each explicit createExtension(memberScratch) call
+returns a fresh instance bound to that host, including deferred block execution,
+editor helpers and lifecycle callbacks. The factory does not call
+Scratch.extensions.register; the standalone entry uses the same factory and
+registers exactly once.
+
+The frozen bundleModuleMetadata declares formatVersion: 1, the original id and
+unsandboxed requirement. An integrated host validates these before creation and
+owns registration and disposal. Existing IDs, opcodes and saved data stay unchanged.
+
+The existing STRUCTURED_DATA_MVP, NAMED_DATA_REGISTRY_MVP and Schema reference startup flags retain their defaults. Creation performs the existing optional editor and named-data initialization against the injected host. Call and await dispose() to release the instance registrations and listeners. Internal callers constructing StructuredDataExtension directly now pass the host first, followed by the existing optional feature arguments.
+
+Runtime dependencies (including yaml and their subpaths) remain external imports.
+Only the existing small, pure development-time editor helpers are included, so
+production consumers need no editor package or GUI engine. Public types use the
+same ES2022 libraries as the project tsconfig; generated JavaScript targets ES2020.
+The package retains its existing exports and adds ./bundle-module; no template
+runtime dependency is required.
+
+pnpm run build:module builds this entry; pnpm run check:module packs and installs
+the actual package with production dependencies only, checks host isolation,
+standalone parity and public types, and rejects editor-engine dependency leaks.
+The integrated sb3-toolchain build remains a later step in
+[sb3-toolchain #65](https://github.com/kubohiroya/sb3-toolchain/issues/65).
+To roll back, continue loading the existing classic dist artifact without selecting
+this module entry. No runtime flag or saved-data migration is introduced.
+
 ## Development
 
 ```bash

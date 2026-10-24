@@ -35,7 +35,7 @@ if (!bundle.includes('// ID: kubohiroyastructureddata') || !bundle.includes('STR
 if (process.env.CI === 'true' || process.env.CHECK_TRACKED_DIST === 'true') {
   const {stdout} = await execFileAsync(
     'git',
-    ['status', '--short', '--untracked-files=all', '--', 'dist'],
+    ['status', '--short', '--untracked-files=all', '--', 'dist', 'lib-module'],
     {cwd: repositoryRoot}
   );
   if (stdout.length > 0) {

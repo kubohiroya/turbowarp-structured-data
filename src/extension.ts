@@ -1,7 +1,8 @@
+import type {ScratchApi, TurboWarpExtension, ScratchBlockUtility} from './runtime-api.js';
 import {fixedInputEditorDefinitions, registerFixedInputEditors} from './fixed-input-editors.js';
 import {sourceEditorDefinitions} from './editor-schema.js';
 import {registerSourceEditors} from './source-editor.js';
-import definitions from './block-definitions.json';
+import definitions from './block-definitions.json' with {type: 'json'};
 import {
   bindNamedDataRegistryLifecycle,
   installNamedDataRegistry,
@@ -88,12 +89,13 @@ export class StructuredDataExtension implements TurboWarpExtension {
   private readonly unbindNamedDataRegistryLifecycle?: () => void;
 
   public constructor(
+    private readonly scratch: ScratchApi,
     enabled = isStructuredDataMvpEnabled(),
     namedDataEnabled = isNamedDataRegistryMvpEnabled()
   ) {
     this.enabled = enabled;
-    this.unregisterSourceEditors = registerSourceEditors(Scratch, enabled ? sourceEditorDefinitions : []);
-    const runtime = Scratch.vm?.runtime;
+    this.unregisterSourceEditors = registerSourceEditors(this.scratch, enabled ? sourceEditorDefinitions : []);
+    const runtime = this.scratch.vm?.runtime;
     const onDispose = () => {void this.dispose();};
     const onStop = () => this.clearRuntimeState();
     this.releaseRuntimeListeners = () => {
@@ -102,13 +104,13 @@ export class StructuredDataExtension implements TurboWarpExtension {
     };
     let unregisterFixed = () => {};
     try {
-      unregisterFixed = registerFixedInputEditors(Scratch, enabled ? fixedInputEditorDefinitions : []);
+      unregisterFixed = registerFixedInputEditors(this.scratch, enabled ? fixedInputEditorDefinitions : []);
       this.unregisterFixedInputEditors = unregisterFixed;
     if (namedDataEnabled) {
       this.namedDataProvider = new StructuredDataNamedDataProvider({
         get: (target, name) => this.registries.get(target)?.get(name)
       });
-      const runtime = Scratch.vm?.runtime;
+      const runtime = this.scratch.vm?.runtime;
       if (runtime) {
         this.namedDataRegistry = installNamedDataRegistry(runtime);
         this.namedDataRegistration = this.namedDataRegistry.registerProvider(
@@ -154,7 +156,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
   public getInfo(): Record<string, unknown> {
     return {
       id: extensionConfig.id,
-      name: Scratch.translate(definitions.extensionName),
+      name: this.scratch.translate(definitions.extensionName),
       docsURI: extensionConfig.docsURI,
       blockIconURI: extensionConfig.blockIconURI,
       blocks: this.enabled ? blockDefinitions.map((block) => this.toScratchBlock(block)) : []
@@ -165,7 +167,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
     this.store(
       util.target,
       args.NAME,
-      parseJsonDocument(Scratch.Cast.toString(args.TEXT)),
+      parseJsonDocument(this.scratch.Cast.toString(args.TEXT)),
       'json'
     );
   }
@@ -174,7 +176,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
     this.store(
       util.target,
       args.NAME,
-      parseYamlDocument(Scratch.Cast.toString(args.TEXT)),
+      parseYamlDocument(this.scratch.Cast.toString(args.TEXT)),
       'yaml'
     );
   }
@@ -215,7 +217,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
     const updated = setAtPath(
       this.requireDataByName(util.target, name),
       this.path(args.PATH),
-      parseJsonValue(Scratch.Cast.toString(args.VALUE))
+      parseJsonValue(this.scratch.Cast.toString(args.VALUE))
     );
     this.setBinding(util.target, name, updated);
   }
@@ -251,7 +253,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
         entries: iterationEntries(
           this.requireData(util.target, args.NAME),
           this.path(args.PATH),
-          Scratch.Cast.toNumber(args.MAX)
+          this.scratch.Cast.toNumber(args.MAX)
         ),
         cursor: 0,
         active: false
@@ -333,7 +335,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
   }
 
   private name(value: unknown): string {
-    const name = Scratch.Cast.toString(value).trim();
+    const name = this.scratch.Cast.toString(value).trim();
     if (name.length === 0) {
       throw new StructuredDataError('INVALID_NAME', 'Structured data name cannot be empty.');
     }
@@ -365,7 +367,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
   }
 
   private path(value: unknown) {
-    return parsePath(Scratch.Cast.toString(value));
+    return parsePath(this.scratch.Cast.toString(value));
   }
 
   private clearRuntimeState(): void {
@@ -378,12 +380,12 @@ export class StructuredDataExtension implements TurboWarpExtension {
   private toScratchBlock(block: BlockDefinition): Record<string, unknown> {
     return {
       opcode: block.opcode,
-      blockType: Scratch.BlockType[block.blockType],
-      text: Scratch.translate(block.text),
+      blockType: this.scratch.BlockType[block.blockType],
+      text: this.scratch.translate(block.text),
       arguments: Object.fromEntries(
         Object.entries(block.arguments).map(([name, argument]) => [
           name,
-          {type: Scratch.ArgumentType[argument.type], defaultValue: argument.defaultValue}
+          {type: this.scratch.ArgumentType[argument.type], defaultValue: argument.defaultValue}
         ])
       )
     };
