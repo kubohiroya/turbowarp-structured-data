@@ -8,7 +8,6 @@ import {
 import {
   extensionConfig,
   isNamedDataRegistryMvpEnabled,
-  isNamedDataSchemaRefEnabled,
   isStructuredDataMvpEnabled
 } from './config.js';
 import {
@@ -83,14 +82,13 @@ export class StructuredDataExtension implements TurboWarpExtension {
 
   public constructor(
     enabled = isStructuredDataMvpEnabled(),
-    namedDataEnabled = isNamedDataRegistryMvpEnabled(),
-    schemaRefEnabled = isNamedDataSchemaRefEnabled()
+    namedDataEnabled = isNamedDataRegistryMvpEnabled()
   ) {
     this.enabled = enabled;
     if (namedDataEnabled) {
       this.namedDataProvider = new StructuredDataNamedDataProvider({
         get: (target, name) => this.registries.get(target)?.get(name)
-      }, undefined, schemaRefEnabled);
+      });
       const runtime = Scratch.vm?.runtime;
       if (runtime) {
         this.namedDataRegistry = installNamedDataRegistry(runtime);

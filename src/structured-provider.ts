@@ -1,4 +1,5 @@
 import {renderJsonDocument, renderYamlDocument} from './codecs.js';
+import {isNamedDataSchemaRefEnabled} from './config.js';
 import type {JsonValue} from './core.js';
 import {
   NamedDataError,
@@ -34,7 +35,7 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
   public constructor(
     private readonly store: StructuredDataBindingStore,
     private readonly maxBodyBytes = STRUCTURED_BODY_MAX_BYTES,
-    private readonly schemaRefEnabled = false
+    private readonly schemaRefEnabled = isNamedDataSchemaRefEnabled()
   ) {}
 
   public canResolve(

@@ -6816,7 +6816,7 @@
   var STRUCTURED_DATA_NAMESPACE = "structured";
   var STRUCTURED_BODY_MAX_BYTES = 262144;
   var StructuredDataNamedDataProvider = class {
-  	constructor(store, maxBodyBytes = STRUCTURED_BODY_MAX_BYTES, schemaRefEnabled = false) {
+  	constructor(store, maxBodyBytes = STRUCTURED_BODY_MAX_BYTES, schemaRefEnabled = isNamedDataSchemaRefEnabled()) {
   		this.store = store;
   		this.maxBodyBytes = maxBodyBytes;
   		this.schemaRefEnabled = schemaRefEnabled;
@@ -6905,13 +6905,13 @@
   var LOOP_STATE = "structuredDataLoopState";
   var blockDefinitions = block_definitions_default.blocks;
   var StructuredDataExtension = class {
-  	constructor(enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaRefEnabled = isNamedDataSchemaRefEnabled()) {
+  	constructor(enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled()) {
   		this.registries = /* @__PURE__ */ new WeakMap();
   		this.iterationStacks = /* @__PURE__ */ new WeakMap();
   		this.nextRevision = 1;
   		this.enabled = enabled;
   		if (namedDataEnabled) {
-  			this.namedDataProvider = new StructuredDataNamedDataProvider({ get: (target, name) => this.registries.get(target)?.get(name) }, void 0, schemaRefEnabled);
+  			this.namedDataProvider = new StructuredDataNamedDataProvider({ get: (target, name) => this.registries.get(target)?.get(name) });
   			const runtime = Scratch.vm?.runtime;
   			if (runtime) {
   				this.namedDataRegistry = installNamedDataRegistry(runtime);
