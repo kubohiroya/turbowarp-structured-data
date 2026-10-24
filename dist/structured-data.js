@@ -46,6 +46,10 @@
   	enumerable: true
   }) : target, mod));
   var __toCommonJS = (mod) => __hasOwnProp.call(mod, "module.exports") ? mod["module.exports"] : __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  function isNamedDataSchemaRefEnabled(source = globalThis) {
+  	const value = source.__TW_NAMED_DATA_FEATURE_FLAGS__?.NAMED_DATA_SCHEMA_REF;
+  	return value === void 0 ? false : value === true || value === "true";
+  }
   function isStructuredDataMvpEnabled(source = globalThis) {
   	const value = source.STRUCTURED_DATA_MVP;
   	return value === void 0 ? false : value === true || value === "true";
@@ -14637,6 +14641,7 @@
   			...opened.digest === void 0 ? {} : { digest: opened.digest },
   			revision: opened.revision,
   			replayable: opened.replayable,
+  			...opened.schemaRef === void 0 ? {} : { schemaRef: opened.schemaRef },
   			body: opened.body,
   			release: tracked.release
   		});
@@ -14802,9 +14807,10 @@
   var STRUCTURED_DATA_NAMESPACE = "structured";
   var STRUCTURED_BODY_MAX_BYTES = 262144;
   var StructuredDataNamedDataProvider = class {
-  	constructor(store, maxBodyBytes = STRUCTURED_BODY_MAX_BYTES) {
+  	constructor(store, maxBodyBytes = STRUCTURED_BODY_MAX_BYTES, schemaRefEnabled = isNamedDataSchemaRefEnabled()) {
   		this.store = store;
   		this.maxBodyBytes = maxBodyBytes;
+  		this.schemaRefEnabled = schemaRefEnabled;
   		this.namespace = STRUCTURED_DATA_NAMESPACE;
   		this.kind = "structured";
   		this.openBodies = /* @__PURE__ */ new Set();
@@ -14815,7 +14821,7 @@
   	}
   	stat(reference, representation, context) {
   		const resolved = this.resolve(reference, representation, context);
-  		return this.metadata(reference, resolved.nativeRepresentation, representation, resolved.bytes.byteLength, resolved.revision);
+  		return this.metadata(reference, resolved.nativeRepresentation, representation, resolved.bytes.byteLength, resolved.revision, resolved.schemaRef);
   	}
   	openBody(reference, representation, context) {
   		const resolved = this.resolve(reference, representation, context);
@@ -14823,7 +14829,7 @@
   		this.openBodies.add(handle);
   		let released = false;
   		return {
-  			...this.metadata(reference, resolved.nativeRepresentation, representation, resolved.bytes.byteLength, resolved.revision),
+  			...this.metadata(reference, resolved.nativeRepresentation, representation, resolved.bytes.byteLength, resolved.revision, resolved.schemaRef),
   			body: resolved.bytes,
   			release: () => {
   				if (released) return;
@@ -14845,6 +14851,9 @@
   		this.throwIfAborted(context.signal);
   		const binding = this.store.get(context.target, reference.name);
   		if (!binding) throw new NamedDataError("NAMED_DATA_NOT_FOUND", `Structured data does not exist: ${reference.name}`);
+  		const requestedSchemaRef = reference.schemaRef;
+  		if (requestedSchemaRef !== void 0 && !this.schemaRefEnabled) throw new NamedDataError("NAMED_DATA_SCHEMA_UNRESOLVED", "Schema reference resolution is disabled.");
+  		if (requestedSchemaRef !== void 0 && (binding.schemaRef?.id !== requestedSchemaRef.id || binding.schemaRef?.version !== requestedSchemaRef.version)) throw new NamedDataError("NAMED_DATA_SCHEMA_VERSION_MISMATCH", "Binding schemaRef does not match the requested reference.");
   		const text = this.render(binding.value, representation);
   		const bytes = new TextEncoder().encode(text);
   		if (bytes.byteLength > this.maxBodyBytes) throw new NamedDataError("NAMED_DATA_BODY_TOO_LARGE", `Encoded body is ${bytes.byteLength} bytes; maximum is ${this.maxBodyBytes}.`);
@@ -14852,7 +14861,8 @@
   		return {
   			bytes,
   			revision: binding.revision,
-  			nativeRepresentation: binding.nativeRepresentation
+  			nativeRepresentation: binding.nativeRepresentation,
+  			...requestedSchemaRef === void 0 ? {} : { schemaRef: binding.schemaRef }
   		};
   	}
   	validateReference(reference, context) {
@@ -14865,7 +14875,7 @@
   		if (representation === "yaml") return renderYamlDocument(value);
   		throw new NamedDataError("NAMED_DATA_REPRESENTATION_UNSUPPORTED", `Structured data cannot be rendered as ${representation}.`);
   	}
-  	metadata(reference, nativeRepresentation, representation, byteLength, revision) {
+  	metadata(reference, nativeRepresentation, representation, byteLength, revision, schemaRef) {
   		return {
   			reference: { ...reference },
   			nativeRepresentation,
@@ -14873,7 +14883,8 @@
   			mediaType: representation === "json" ? "application/json; charset=utf-8" : "application/yaml; charset=utf-8",
   			byteLength,
   			revision: String(revision),
-  			replayable: true
+  			replayable: true,
+  			...schemaRef === void 0 ? {} : { schemaRef }
   		};
   	}
   	throwIfAborted(signal) {

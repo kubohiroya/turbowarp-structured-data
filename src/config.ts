@@ -1,5 +1,16 @@
 export const STRUCTURED_DATA_MVP_DEFAULT = false;
 export const NAMED_DATA_REGISTRY_MVP_DEFAULT = false;
+export const NAMED_DATA_SCHEMA_REF_DEFAULT = false;
+
+export function isNamedDataSchemaRefEnabled(
+  source: {__TW_NAMED_DATA_FEATURE_FLAGS__?: {NAMED_DATA_SCHEMA_REF?: unknown}} =
+    globalThis as {__TW_NAMED_DATA_FEATURE_FLAGS__?: {NAMED_DATA_SCHEMA_REF?: unknown}}
+): boolean {
+  const value = source.__TW_NAMED_DATA_FEATURE_FLAGS__?.NAMED_DATA_SCHEMA_REF;
+  return value === undefined
+    ? NAMED_DATA_SCHEMA_REF_DEFAULT
+    : value === true || value === 'true';
+}
 
 export function isStructuredDataMvpEnabled(
   source: {STRUCTURED_DATA_MVP?: unknown} = globalThis as {STRUCTURED_DATA_MVP?: unknown}
