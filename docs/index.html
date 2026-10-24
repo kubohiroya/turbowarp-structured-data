@@ -1,14 +1,20 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Structured Data documentation</title>
-  <style>
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:900px;margin:0 auto;padding:2rem;line-height:1.6;color:#222}
-    code{background:#f3f3f3;padding:.1em .3em;border-radius:.25em}
-    pre{background:#f6f8fa;padding:1rem;overflow:auto;border-radius:.5rem}
-  </style>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b0912">
+    <meta name="description" content="User guide for the Structured Data TurboWarp extension: load JSON or YAML into a named value, read and update it by path, loop over it, and turn it back into text.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Structured Data — User Guide">
+    <meta property="og:description" content="Work with JSON and YAML in TurboWarp: named values, safe paths, bounded loops.">
+    <meta property="og:url" content="https://kubohiroya.github.io/turbowarp-structured-data/">
+    <link rel="canonical" href="https://kubohiroya.github.io/turbowarp-structured-data/">
+    <link rel="alternate" hreflang="en" href="https://kubohiroya.github.io/turbowarp-structured-data/">
+    <link rel="alternate" hreflang="ja" href="https://kubohiroya.github.io/turbowarp-structured-data/ja/">
+    <link rel="alternate" hreflang="x-default" href="https://kubohiroya.github.io/turbowarp-structured-data/">
+    <link rel="stylesheet" href="./assets/site.css">
+    <title>Structured Data — User Guide</title>
 <style id="block-reference-style">
 #extension-block-reference{max-width:72rem;margin:2rem auto;padding:1rem;line-height:1.6;overflow-wrap:anywhere}
 #extension-block-reference .block-reference-entry{display:block;scroll-margin-top:6rem;margin:2rem 0;padding:1rem;border:1px solid currentColor;border-radius:.5rem}
@@ -18,19 +24,569 @@
 #extension-block-reference code{white-space:pre-wrap}
 #extension-block-reference a:focus-visible{outline:3px solid currentColor;outline-offset:3px}
 </style>
-</head>
-<body><p lang="en" class="complete-block-reference-link"><a href="#extension-block-reference">Complete block reference (16 blocks)</a></p>
-  <h1>Structured Data</h1>
-  <p>Named structured data with safe JSON/YAML codecs and deterministic path operations.</p>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="./" aria-label="Structured Data home">
+          <span class="brand-mark" aria-hidden="true">{ }</span>
+          <span class="brand-name">Structured Data</span>
+        </a>
+        <nav class="main-nav" aria-label="Guide sections">
+          <a href="#start">Start</a>
+          <a href="#flow">Flow</a>
+          <a href="#paths">Paths</a>
+          <a href="#loops">Loops</a>
+          <a href="#blocks">Blocks</a>
+          <a href="#help">Help</a>
+          <a href="#extension-block-reference">Reference</a>
+        </nav>
+        <a
+          class="github-link"
+          href="https://github.com/kubohiroya/turbowarp-structured-data"
+          aria-label="View the source code on GitHub"
+        >
+          <img src="./assets/github-mark.svg" width="24" height="24" alt="">
+          <span class="github-link-label">GitHub</span>
+        </a>
+        <nav class="language-nav" aria-label="Language">
+          <a href="./" lang="en" hreflang="en" aria-current="page">English</a>
+          <a href="./ja/" lang="ja" hreflang="ja">日本語</a>
+        </nav>
+      </div>
+    </header>
 
-  <h2>Blocks</h2>
-  <p>Parse JSON or YAML into a target-local name, update it with restricted paths, iterate with an explicit bound, and render it back to JSON or YAML.</p>
+    <main id="content" class="page-shell"><p lang="en" class="complete-block-reference-link"><a href="#extension-block-reference">Complete block reference (16 blocks)</a></p>
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">TurboWarp custom extension</p>
+          <h1 id="hero-title">Real data, without the string juggling.</h1>
+          <p class="lede">
+            Load JSON or YAML once, give it a name, and work with it directly: read one
+            field, change one value, loop over a list, then turn the result back into text.
+            No more splitting strings or keeping parallel lists in sync.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#start">Set it up</a>
+            <a class="button button-secondary" href="#recipes">See examples</a>
+          </div>
+        </div>
+        <div class="hero-visual" aria-label="Example: YAML is parsed as cfg, one value is changed, and JSON is rendered">
+          <div class="visual-window">
+            <div class="window-bar" aria-hidden="true">
+              <i></i><i></i><i></i><span>Structured Data</span>
+            </div>
+            <div class="scratch-stack">
+              <div class="scratch-block">
+                parse YAML <code>speed: 4</code> as <code>cfg</code>
+              </div>
+              <div class="scratch-block">
+                set <code>cfg</code> at path <code>$.speed</code> to JSON <code>6</code>
+              </div>
+              <div class="result-line">
+                <span>to JSON <code>cfg</code></span>
+                <span aria-hidden="true">→</span>
+                <span class="result-pill">{"speed":6}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-  <h2>Enable the MVP</h2>
-  <p>Set <code>globalThis.STRUCTURED_DATA_MVP = true</code> in the TurboWarp page, then load <code>structured-data.js</code> with <strong>Run extension without sandbox</strong> enabled. Start with <code>parse JSON ... as ...</code> or <code>parse YAML ... as ...</code>.</p>
+      <section id="start" class="section" aria-labelledby="start-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 · Start here</p>
+            <h2 id="start-title">Ready in three steps.</h2>
+          </div>
+          <p>
+            Structured Data is an opt-in preview. Its blocks appear only when the startup
+            flag is set before the extension loads, so an existing project is never
+            affected by accident.
+          </p>
+        </div>
 
-  <h2>Development</h2>
-  <p>See the repository README and architecture documentation for build, test, release, and compatibility details.</p>
+        <div class="step-grid">
+          <article class="step">
+            <span class="step-number">1</span>
+            <h3>Turn on the feature flag</h3>
+            <p>
+              In the page that runs TurboWarp (for example, from the browser console or
+              your own host page), run <code>globalThis.STRUCTURED_DATA_MVP = true</code>
+              <em>before</em> loading the extension.
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-number">2</span>
+            <h3>Load the extension</h3>
+            <p>
+              Add the extension URL below as a custom extension and choose
+              <strong>Run extension without sandbox</strong>.
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-number">3</span>
+            <h3>Parse your first value</h3>
+            <p>
+              Drag <code>parse JSON [ ] as [data]</code> or
+              <code>parse YAML [ ] as [data]</code> into a script and click it. The name
+              <code>data</code> now holds your value.
+            </p>
+          </article>
+        </div>
+
+        <div class="code-card" style="margin-top: 1rem">
+          <span class="code-label">Version-pinned extension URL</span>
+          <pre><code>https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-structured-data@0.6.2/dist/structured-data.js</code></pre>
+        </div>
+
+        <div class="callout" role="note" style="margin-top: 1rem">
+          <span class="callout-mark" aria-hidden="true">!</span>
+          <p>
+            <strong>Unsandboxed access is required.</strong> Each sprite and the stage keep
+            their own named values, and loops track the running script. That needs direct
+            access to the TurboWarp VM. The extension makes no network requests and stores
+            nothing outside the running project. Only load extension files from a source
+            you trust.
+          </p>
+        </div>
+      </section>
+
+      <section id="flow" class="section" aria-labelledby="flow-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">02 · How it works</p>
+            <h2 id="flow-title">Parse once. Work by name. Render when you need text.</h2>
+          </div>
+          <p>
+            Text goes in, a named value lives in the sprite, and you only get text back
+            when you ask for it. In between, every block works on the real structure:
+            objects, arrays, numbers, strings, Booleans, and <code>null</code>.
+          </p>
+        </div>
+
+        <figure class="diagram" aria-labelledby="flow-diagram-title">
+          <figcaption id="flow-diagram-title" class="diagram-title">
+            The life of a named value
+          </figcaption>
+          <div class="flow">
+            <div class="flow-node">
+              <strong>JSON or YAML text</strong>
+              <small>from a variable, a list item, a file, or a web response</small>
+            </div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-node flow-node-accent">
+              <strong>Named value</strong>
+              <small>read, test, set, delete, and loop by <code>$.path</code></small>
+            </div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-node flow-node-result">
+              <strong>JSON or YAML text</strong>
+              <small>stable key order, ready to save or send</small>
+            </div>
+          </div>
+        </figure>
+
+        <div class="two-column" style="margin-top: 1rem">
+          <article class="card">
+            <h3>Each sprite has its own names</h3>
+            <p>
+              <code>config</code> in Sprite1 and <code>config</code> on the stage are two
+              separate values. Parsing the same name again replaces it.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Values last until Stop</h3>
+            <p>
+              Named values live only while the project runs. Clicking Stop clears them, and
+              they are not saved in the project file. Keep the source text in a variable
+              if you need it later.
+            </p>
+          </article>
+        </div>
+
+        <div id="recipes" class="recipe-grid" style="margin-top: 1rem">
+          <article class="recipe">
+            <h3>Read a setting</h3>
+            <div class="code-card">
+              <span class="code-label">blocks</span>
+              <pre><code>parse JSON [{"level":{"speed":4}}] as [cfg]
+get JSON from [cfg] at path [$.level.speed]
+→ 4</code></pre>
+            </div>
+            <p>Use the reporter wherever you would use a number or a piece of text.</p>
+          </article>
+          <article class="recipe">
+            <h3>Update and save</h3>
+            <div class="code-card">
+              <span class="code-label">blocks</span>
+              <pre><code>set [save] at path [$.score] to JSON [120]
+set [save] at path [$.name] to JSON ["Mio"]
+set [saved text] to (to JSON [save])</code></pre>
+            </div>
+            <p>The value is JSON, so text needs quotes: <code>"Mio"</code>, not <code>Mio</code>.</p>
+          </article>
+          <article class="recipe">
+            <h3>Check before you read</h3>
+            <div class="code-card">
+              <span class="code-label">blocks</span>
+              <pre><code>if &lt;structured data [save] has path [$.items]?&gt;
+  say (length of array in [save] at path [$.items])</code></pre>
+            </div>
+            <p>Test first to avoid errors from missing data or paths.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="paths" class="section" aria-labelledby="paths-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">03 · Paths</p>
+            <h2 id="paths-title">Point at exactly one place.</h2>
+          </div>
+          <p>
+            A path starts at <code>$</code>, the whole value, and steps into it one key or
+            index at a time. Paths are deliberately simple: each one names a single
+            location, so a block can never touch more than you meant.
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Path</th>
+                <th scope="col">Points at</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>$</code></td>
+                <td>The whole value.</td>
+              </tr>
+              <tr>
+                <td><code>$.player.name</code></td>
+                <td>Key <code>name</code> inside key <code>player</code>. Dot keys use letters, digits, and <code>_</code>, and do not start with a digit.</td>
+              </tr>
+              <tr>
+                <td><code>$.items[0]</code></td>
+                <td>The first item of the <code>items</code> array. Indexes start at 0.</td>
+              </tr>
+              <tr>
+                <td><code>$["key.with dots"]</code></td>
+                <td>Any key, including spaces, dots, or Japanese text, written in quotes and brackets.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="syntax-layout" style="margin-top: 1rem">
+          <article class="syntax-list supported">
+            <h3>What <code>set</code> and <code>delete path</code> do</h3>
+            <ul>
+              <li><code>set</code> can replace the root, replace an existing array item, or add or replace a key in an existing object.</li>
+              <li>Deleting an array item moves later items forward by one.</li>
+              <li>A change is applied only after it fully succeeds, so a failed block leaves your value unchanged.</li>
+            </ul>
+          </article>
+          <article class="syntax-list rejected">
+            <h3>What is rejected</h3>
+            <ul>
+              <li>Creating missing parent objects or arrays automatically.</li>
+              <li>Appending past the end of an array.</li>
+              <li>Deleting <code>$</code>; use <code>delete structured data</code> instead.</li>
+              <li>Wildcards, slices, filters, recursive search, and expressions.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="loops" class="section" aria-labelledby="loops-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">04 · Loops</p>
+            <h2 id="loops-title">Visit every item, in a predictable order.</h2>
+          </div>
+          <p>
+            <code>for each in [ ] at path [ ] max [ ]</code> runs its inner blocks once per
+            array item or object key. Inside the loop, three reporters tell you where you
+            are.
+          </p>
+        </div>
+
+        <div class="two-column">
+          <div class="code-card">
+            <span class="code-label">blocks</span>
+            <pre><code>parse JSON [{"items":["apple","pear"]}] as [shop]
+for each in [shop] at path [$.items] max [100]
+  say (join (current index) (current value JSON))
+→ 0"apple"   1"pear"</code></pre>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Reporter</th>
+                  <th scope="col">Inside the loop</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>current key</code></td>
+                  <td>The object key, or the array index as text.</td>
+                </tr>
+                <tr>
+                  <td><code>current index</code></td>
+                  <td>The step number, starting at 0.</td>
+                </tr>
+                <tr>
+                  <td><code>current value JSON</code></td>
+                  <td>The current item as JSON.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-grid" style="margin-top: 1rem">
+          <article class="card">
+            <h3>Same order every time</h3>
+            <p>Arrays go by index. Objects go by key, sorted by Unicode code point, so results do not depend on how the text was written.</p>
+          </article>
+          <article class="card">
+            <h3><code>max</code> is a safety limit</h3>
+            <p>Use a whole number from 1 to 1000 (default 100). If the collection is bigger, the loop fails instead of silently skipping items.</p>
+          </article>
+          <article class="card">
+            <h3>Safe to nest</h3>
+            <p>Loops can be placed inside other loops. The reporters always describe the innermost loop that is running.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="blocks" class="section" aria-labelledby="blocks-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">05 · Block guide</p>
+            <h2 id="blocks-title">Choose a block by what you want to do.</h2>
+          </div>
+          <p>
+            Every block below takes a <code>NAME</code>. The
+            <a href="#extension-block-reference">complete block reference</a> lists each
+            argument and default value.
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">I want to…</th>
+                <th scope="col">Use</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Load text into a named value</td>
+                <td><a href="#block-parseJson"><code>parse JSON [ ] as [ ]</code></a>, <a href="#block-parseYaml"><code>parse YAML [ ] as [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>Get the whole value back as text</td>
+                <td><a href="#block-toJson"><code>to JSON [ ]</code></a>, <a href="#block-toYaml"><code>to YAML [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>Check or remove a named value</td>
+                <td><a href="#block-hasStructuredData"><code>structured data [ ] exists?</code></a>, <a href="#block-deleteStructuredData"><code>delete structured data [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>Read or test one location</td>
+                <td><a href="#block-getJsonAtPath"><code>get JSON from [ ] at path [ ]</code></a>, <a href="#block-hasPath"><code>structured data [ ] has path [ ]?</code></a></td>
+              </tr>
+              <tr>
+                <td>Change one location</td>
+                <td><a href="#block-setJsonAtPath"><code>set [ ] at path [ ] to JSON [ ]</code></a>, <a href="#block-deleteAtPath"><code>delete path [ ] from [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>Inspect a collection</td>
+                <td><a href="#block-keysAtPath"><code>keys in [ ] at path [ ]</code></a> (sorted, as a JSON array), <a href="#block-lengthAtPath"><code>length of array in [ ] at path [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>Repeat for each item</td>
+                <td><a href="#block-forEachAtPath"><code>for each in [ ] at path [ ] max [ ]</code></a> with <a href="#block-currentKey"><code>current key</code></a>, <a href="#block-currentIndex"><code>current index</code></a>, <a href="#block-currentValueJson"><code>current value JSON</code></a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="safety" class="section" aria-labelledby="safety-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">06 · Limits and safety</p>
+            <h2 id="safety-title">Strict input, predictable output.</h2>
+          </div>
+          <p>
+            Structured Data accepts plain data only and fails clearly instead of guessing.
+            That keeps large or unusual input from freezing a project or changing meaning.
+          </p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <h3>Size limits</h3>
+            <p>Each parse accepts up to 256 KiB of text, nesting up to 64 levels deep, and up to 50,000 values in total.</p>
+          </article>
+          <article class="card">
+            <h3>Safe YAML</h3>
+            <p>Aliases, unknown tags, duplicate keys, non-text keys, unsupported scalar types, and parser warnings are rejected.</p>
+          </article>
+          <article class="card">
+            <h3>Stable output</h3>
+            <p><code>to JSON</code> and <code>to YAML</code> always sort keys, so the same data gives the same text: easy to compare, save, or send.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="editors" class="section" aria-labelledby="editors-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">07 · Optional integrations</p>
+            <h2 id="editors-title">Editing forms and shared named data.</h2>
+          </div>
+          <p>
+            These features are off by default and need nothing for normal use. Turn them on
+            only in a TurboWarp build or host that supports them.
+          </p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <h3>Source and Form editor</h3>
+            <p>
+              With the GUI startup options <code>blockEditorDialogs=1</code> and
+              <code>blockEditorSourceForms=1</code>, the JSON/YAML inputs of
+              <code>parse JSON</code>, <code>parse YAML</code>, and <code>set … to JSON</code>
+              open in an editor that switches between source text and a form. Unchanged
+              text is kept exactly as written, and input the block would reject cannot be saved.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Fixed-input editor for <code>max</code></h3>
+            <p>
+              With <code>blockEditorDialogs</code> and <code>blockEditorFixedInputs</code>
+              both on, the <code>max</code> input of <code>for each</code> gets a form that
+              accepts whole numbers from 1 to 1000. Existing values are not rewritten unless
+              you edit them, and connected reporters are never evaluated.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Named Data provider</h3>
+            <p>
+              With <code>globalThis.NAMED_DATA_REGISTRY_MVP = true</code>, named values are
+              also offered to other extensions through the shared
+              <a href="https://kubohiroya.github.io/turbowarp-named-data/">Named Data</a>
+              registry as <code>structured</code> data. Add
+              <code>__TW_NAMED_DATA_FEATURE_FLAGS__ = {NAMED_DATA_SCHEMA_REF: true}</code>
+              to pass along schema identities.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="help" class="section" aria-labelledby="help-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">08 · Troubleshooting</p>
+            <h2 id="help-title">When a block does not do what you expect.</h2>
+          </div>
+          <p>
+            Most problems come from the startup flag, JSON quoting, or a value that was
+            cleared by Stop. When a block fails it reports one of the stable error codes
+            below, and your named value stays as it was.
+          </p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <h3>The palette is empty</h3>
+            <p>
+              Set <code>globalThis.STRUCTURED_DATA_MVP = true</code> first, then load the
+              extension again. The flag is read only once, at startup.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Text values come back with quotes</h3>
+            <p>
+              <code>get JSON</code> returns JSON, so the text <code>Mio</code> comes back as
+              <code>"Mio"</code>. Store text with quotes too: <code>set … to JSON ["Mio"]</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>“DATA_NOT_FOUND” after Stop</h3>
+            <p>
+              Stop clears all named values. Parse your data again from a
+              <em>when green flag clicked</em> script.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Another sprite cannot see my data</h3>
+            <p>
+              Names belong to the sprite or stage that ran the parse. Parse in each sprite
+              that needs the value, or pass the JSON text through a global variable.
+            </p>
+          </article>
+          <article class="card">
+            <h3>“PATH_NOT_FOUND” when setting</h3>
+            <p>
+              <code>set</code> does not create missing parents. Set the parent first, for
+              example <code>$.player</code> to <code>{}</code>, then <code>$.player.name</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>“ITERATION_LIMIT_EXCEEDED”</h3>
+            <p>
+              The collection is larger than <code>max</code>. Raise <code>max</code> (up to
+              1000) or loop over a smaller part of the data.
+            </p>
+          </article>
+        </div>
+
+        <div class="table-wrap" style="margin-top: 1rem">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Error code</th>
+                <th scope="col">Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>INVALID_JSON</code> / <code>INVALID_YAML</code></td><td>The text could not be parsed, or uses YAML features that are not allowed.</td></tr>
+              <tr><td><code>PARSE_LIMIT_EXCEEDED</code></td><td>The text is larger, deeper, or has more values than the limits allow.</td></tr>
+              <tr><td><code>INVALID_NAME</code></td><td>The name is empty or only spaces.</td></tr>
+              <tr><td><code>DATA_NOT_FOUND</code></td><td>No value with that name exists in this sprite.</td></tr>
+              <tr><td><code>INVALID_PATH</code></td><td>The path is not written in the supported form.</td></tr>
+              <tr><td><code>PATH_NOT_FOUND</code></td><td>The path, or its parent, does not exist.</td></tr>
+              <tr><td><code>TYPE_MISMATCH</code></td><td>The location holds a different type, such as a number where an array was expected.</td></tr>
+              <tr><td><code>INDEX_OUT_OF_RANGE</code></td><td>The array index is past the end of the array.</td></tr>
+              <tr><td><code>ITERATION_LIMIT_EXCEEDED</code></td><td>The collection has more items than <code>max</code>.</td></tr>
+              <tr><td><code>ITERATION_CONTEXT_REQUIRED</code></td><td>A <code>current …</code> reporter was used outside a <code>for each</code> loop.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <p>Structured Data 0.6.2 · MPL-2.0</p>
+        <div class="footer-links">
+          <a href="https://www.npmjs.com/package/@kubohiroya/turbowarp-structured-data">npm</a>
+          <a href="https://github.com/kubohiroya/turbowarp-structured-data/blob/main/docs/architecture.md">Architecture</a>
+          <a href="https://github.com/kubohiroya/turbowarp-structured-data/issues">Report a problem</a>
+        </div>
+      </div>
+    </footer>
 <!-- BEGIN COMPLETE BLOCK REFERENCE -->
 <section lang="en" id="extension-block-reference" aria-labelledby="block-reference-title">
 <h2 id="block-reference-title">Structured Data: complete block reference</h2>
@@ -52,9 +608,9 @@
 <li><a href="#block-currentIndex"><code>current index</code></a></li>
 <li><a href="#block-currentValueJson"><code>current value JSON</code></a></li>
 </ul></nav>
-<article id="block-parseJson" class="block-reference-entry"><h3><code>parse JSON [TEXT] as [NAME]</code></h3><p>Parse JSON text into the target-local structured data namespace.</p><p>Block type: COMMAND. Opcode: <code>parseJson</code>. <a href="#block-parseJson">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>TEXT</code></th><td>STRING</td><td><code>{&quot;name&quot;:&quot;TurboWarp&quot;}</code></td><td></td></tr><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-parseYaml" class="block-reference-entry"><h3><code>parse YAML [TEXT] as [NAME]</code></h3><p>Parse safe YAML text into the target-local structured data namespace.</p><p>Block type: COMMAND. Opcode: <code>parseYaml</code>. <a href="#block-parseYaml">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>TEXT</code></th><td>STRING</td><td><code>name: TurboWarp</code></td><td></td></tr><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-toJson" class="block-reference-entry"><h3><code>to JSON [NAME]</code></h3><p>Render named structured data as canonical JSON.</p><p>Block type: REPORTER. Opcode: <code>toJson</code>. <a href="#block-toJson">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-toYaml" class="block-reference-entry"><h3><code>to YAML [NAME]</code></h3><p>Render named structured data as deterministic YAML.</p><p>Block type: REPORTER. Opcode: <code>toYaml</code>. <a href="#block-toYaml">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-hasStructuredData" class="block-reference-entry"><h3><code>structured data [NAME] exists?</code></h3><p>Report whether the current target has named structured data.</p><p>Block type: BOOLEAN. Opcode: <code>hasStructuredData</code>. <a href="#block-hasStructuredData">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-deleteStructuredData" class="block-reference-entry"><h3><code>delete structured data [NAME]</code></h3><p>Delete named structured data from the current target.</p><p>Block type: COMMAND. Opcode: <code>deleteStructuredData</code>. <a href="#block-deleteStructuredData">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-getJsonAtPath" class="block-reference-entry"><h3><code>get JSON from [NAME] at path [PATH]</code></h3><p>Return a named value at a path as JSON.</p><p>Block type: REPORTER. Opcode: <code>getJsonAtPath</code>. <a href="#block-getJsonAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr></tbody></table></div></article><article id="block-hasPath" class="block-reference-entry"><h3><code>structured data [NAME] has path [PATH]?</code></h3><p>Report whether a path exists in named structured data.</p><p>Block type: BOOLEAN. Opcode: <code>hasPath</code>. <a href="#block-hasPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr></tbody></table></div></article><article id="block-setJsonAtPath" class="block-reference-entry"><h3><code>set [NAME] at path [PATH] to JSON [VALUE]</code></h3><p>Immutably update a named value and replace its binding.</p><p>Block type: COMMAND. Opcode: <code>setJsonAtPath</code>. <a href="#block-setJsonAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr><tr><th scope="row"><code>VALUE</code></th><td>STRING</td><td><code>&quot;Scratch&quot;</code></td><td></td></tr></tbody></table></div></article><article id="block-deleteAtPath" class="block-reference-entry"><h3><code>delete path [PATH] from [NAME]</code></h3><p>Immutably delete a path and replace its named binding.</p><p>Block type: COMMAND. Opcode: <code>deleteAtPath</code>. <a href="#block-deleteAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr></tbody></table></div></article><article id="block-keysAtPath" class="block-reference-entry"><h3><code>keys in [NAME] at path [PATH]</code></h3><p>Return sorted object keys as JSON.</p><p>Block type: REPORTER. Opcode: <code>keysAtPath</code>. <a href="#block-keysAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$</code></td><td></td></tr></tbody></table></div></article><article id="block-lengthAtPath" class="block-reference-entry"><h3><code>length of array in [NAME] at path [PATH]</code></h3><p>Return the array length.</p><p>Block type: REPORTER. Opcode: <code>lengthAtPath</code>. <a href="#block-lengthAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$</code></td><td></td></tr></tbody></table></div></article><article id="block-forEachAtPath" class="block-reference-entry"><h3><code>for each in [NAME] at path [PATH] max [MAX]</code></h3><p>Iterate named data deterministically with a static maximum.</p><p>Block type: LOOP. Opcode: <code>forEachAtPath</code>. <a href="#block-forEachAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$</code></td><td></td></tr><tr><th scope="row"><code>MAX</code></th><td>NUMBER</td><td><code>100</code></td><td></td></tr></tbody></table></div><!-- BEGIN FIXED INPUT HELP --><p id="fixed-input-forEachAtPath-MAX" class="fixed-input-editor">MVP機能を有効にした場合だけ、MAXを整数1〜1000で編集します。入力途中・空白・非finiteな新値は保存できません。NAMEとPATHは変更しません。 GUIのDialogsとFixedInputsは起動時の既定OFFです。両方を有効にして再読込すると固定フォームが使えます。未変更のraw値を保存し直さず、接続reporterは評価しません。</p><!-- END FIXED INPUT HELP --></article><article id="block-currentKey" class="block-reference-entry"><h3><code>current key</code></h3><p>Return the current object key or array index string.</p><p>Block type: REPORTER. Opcode: <code>currentKey</code>. <a href="#block-currentKey">Permanent link</a></p><p>This block has no arguments.</p></article><article id="block-currentIndex" class="block-reference-entry"><h3><code>current index</code></h3><p>Return the zero-based iteration number.</p><p>Block type: REPORTER. Opcode: <code>currentIndex</code>. <a href="#block-currentIndex">Permanent link</a></p><p>This block has no arguments.</p></article><article id="block-currentValueJson" class="block-reference-entry"><h3><code>current value JSON</code></h3><p>Return the current iteration value as JSON.</p><p>Block type: REPORTER. Opcode: <code>currentValueJson</code>. <a href="#block-currentValueJson">Permanent link</a></p><p>This block has no arguments.</p></article>
+<article id="block-parseJson" class="block-reference-entry"><h3><code>parse JSON [TEXT] as [NAME]</code></h3><p>Parse JSON text into the target-local structured data namespace.</p><p>Block type: COMMAND. Opcode: <code>parseJson</code>. <a href="#block-parseJson">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>TEXT</code></th><td>STRING</td><td><code>{&quot;name&quot;:&quot;TurboWarp&quot;}</code></td><td></td></tr><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-parseYaml" class="block-reference-entry"><h3><code>parse YAML [TEXT] as [NAME]</code></h3><p>Parse safe YAML text into the target-local structured data namespace.</p><p>Block type: COMMAND. Opcode: <code>parseYaml</code>. <a href="#block-parseYaml">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>TEXT</code></th><td>STRING</td><td><code>name: TurboWarp</code></td><td></td></tr><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-toJson" class="block-reference-entry"><h3><code>to JSON [NAME]</code></h3><p>Render named structured data as canonical JSON.</p><p>Block type: REPORTER. Opcode: <code>toJson</code>. <a href="#block-toJson">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-toYaml" class="block-reference-entry"><h3><code>to YAML [NAME]</code></h3><p>Render named structured data as deterministic YAML.</p><p>Block type: REPORTER. Opcode: <code>toYaml</code>. <a href="#block-toYaml">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-hasStructuredData" class="block-reference-entry"><h3><code>structured data [NAME] exists?</code></h3><p>Report whether the current target has named structured data.</p><p>Block type: BOOLEAN. Opcode: <code>hasStructuredData</code>. <a href="#block-hasStructuredData">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-deleteStructuredData" class="block-reference-entry"><h3><code>delete structured data [NAME]</code></h3><p>Delete named structured data from the current target.</p><p>Block type: COMMAND. Opcode: <code>deleteStructuredData</code>. <a href="#block-deleteStructuredData">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr></tbody></table></div></article><article id="block-getJsonAtPath" class="block-reference-entry"><h3><code>get JSON from [NAME] at path [PATH]</code></h3><p>Return a named value at a path as JSON.</p><p>Block type: REPORTER. Opcode: <code>getJsonAtPath</code>. <a href="#block-getJsonAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr></tbody></table></div></article><article id="block-hasPath" class="block-reference-entry"><h3><code>structured data [NAME] has path [PATH]?</code></h3><p>Report whether a path exists in named structured data.</p><p>Block type: BOOLEAN. Opcode: <code>hasPath</code>. <a href="#block-hasPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr></tbody></table></div></article><article id="block-setJsonAtPath" class="block-reference-entry"><h3><code>set [NAME] at path [PATH] to JSON [VALUE]</code></h3><p>Immutably update a named value and replace its binding.</p><p>Block type: COMMAND. Opcode: <code>setJsonAtPath</code>. <a href="#block-setJsonAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr><tr><th scope="row"><code>VALUE</code></th><td>STRING</td><td><code>&quot;Scratch&quot;</code></td><td></td></tr></tbody></table></div></article><article id="block-deleteAtPath" class="block-reference-entry"><h3><code>delete path [PATH] from [NAME]</code></h3><p>Immutably delete a path and replace its named binding.</p><p>Block type: COMMAND. Opcode: <code>deleteAtPath</code>. <a href="#block-deleteAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$.name</code></td><td></td></tr></tbody></table></div></article><article id="block-keysAtPath" class="block-reference-entry"><h3><code>keys in [NAME] at path [PATH]</code></h3><p>Return sorted object keys as JSON.</p><p>Block type: REPORTER. Opcode: <code>keysAtPath</code>. <a href="#block-keysAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$</code></td><td></td></tr></tbody></table></div></article><article id="block-lengthAtPath" class="block-reference-entry"><h3><code>length of array in [NAME] at path [PATH]</code></h3><p>Return the array length.</p><p>Block type: REPORTER. Opcode: <code>lengthAtPath</code>. <a href="#block-lengthAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$</code></td><td></td></tr></tbody></table></div></article><article id="block-forEachAtPath" class="block-reference-entry"><h3><code>for each in [NAME] at path [PATH] max [MAX]</code></h3><p>Iterate named data deterministically with a static maximum.</p><p>Block type: LOOP. Opcode: <code>forEachAtPath</code>. <a href="#block-forEachAtPath">Permanent link</a></p><div class="block-reference-table"><table><thead><tr><th>Argument</th><th>Type</th><th>Default value</th><th>Menu choices</th></tr></thead><tbody><tr><th scope="row"><code>NAME</code></th><td>STRING</td><td><code>data</code></td><td></td></tr><tr><th scope="row"><code>PATH</code></th><td>STRING</td><td><code>$</code></td><td></td></tr><tr><th scope="row"><code>MAX</code></th><td>NUMBER</td><td><code>100</code></td><td></td></tr></tbody></table></div><!-- BEGIN FIXED INPUT HELP --><p id="fixed-input-forEachAtPath-MAX" class="fixed-input-editor">When the fixed-input editor is enabled, MAX can be edited as a whole number from 1 to 1000. Partial, blank, or non-finite new values cannot be saved. NAME and PATH are not changed. The editor is off by default: enable both the <code>blockEditorDialogs</code> and <code>blockEditorFixedInputs</code> GUI startup options, then reload. Unchanged raw values are never rewritten, and connected reporters are never evaluated.</p><!-- END FIXED INPUT HELP --></article><article id="block-currentKey" class="block-reference-entry"><h3><code>current key</code></h3><p>Return the current object key or array index string.</p><p>Block type: REPORTER. Opcode: <code>currentKey</code>. <a href="#block-currentKey">Permanent link</a></p><p>This block has no arguments.</p></article><article id="block-currentIndex" class="block-reference-entry"><h3><code>current index</code></h3><p>Return the zero-based iteration number.</p><p>Block type: REPORTER. Opcode: <code>currentIndex</code>. <a href="#block-currentIndex">Permanent link</a></p><p>This block has no arguments.</p></article><article id="block-currentValueJson" class="block-reference-entry"><h3><code>current value JSON</code></h3><p>Return the current iteration value as JSON.</p><p>Block type: REPORTER. Opcode: <code>currentValueJson</code>. <a href="#block-currentValueJson">Permanent link</a></p><p>This block has no arguments.</p></article>
 <p><a href="https://github.com/kubohiroya/turbowarp-structured-data/blob/main/README.md">Repository guide and examples</a></p>
 </section>
 <!-- END COMPLETE BLOCK REFERENCE -->
-</body>
+  </body>
 </html>

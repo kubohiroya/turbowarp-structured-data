@@ -6,12 +6,12 @@ import {readFile, writeFile, mkdir} from 'node:fs/promises';
 const opcode = "forEachAtPath";
 const argument = "MAX";
 const pages = ["docs/index.html"];
-const help = "MVP機能を有効にした場合だけ、MAXを整数1〜1000で編集します。入力途中・空白・非finiteな新値は保存できません。NAMEとPATHは変更しません。";
+const help = "When the fixed-input editor is enabled, MAX can be edited as a whole number from 1 to 1000. Partial, blank, or non-finite new values cannot be saved. NAME and PATH are not changed.";
 const root = new URL('../', import.meta.url);
 const check = process.argv.includes('--check');
 const start = '<!-- BEGIN FIXED INPUT HELP -->';
 const end = '<!-- END FIXED INPUT HELP -->';
-const body = `${start}<p id="fixed-input-${opcode}-${argument}" class="fixed-input-editor">${help} GUIのDialogsとFixedInputsは起動時の既定OFFです。両方を有効にして再読込すると固定フォームが使えます。未変更のraw値を保存し直さず、接続reporterは評価しません。</p>${end}`;
+const body = `${start}<p id="fixed-input-${opcode}-${argument}" class="fixed-input-editor">${help} The editor is off by default: enable both the <code>blockEditorDialogs</code> and <code>blockEditorFixedInputs</code> GUI startup options, then reload. Unchanged raw values are never rewritten, and connected reporters are never evaluated.</p>${end}`;
 for (const page of pages) {
   const target = new URL(page, root);
   const current = await readFile(target, 'utf8');

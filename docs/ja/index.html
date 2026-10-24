@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b0912">
+    <meta name="description" content="TurboWarp機能拡張Structured Dataの使い方：JSONやYAMLを名前付きの値として読み込み、パスで読み書きし、繰り返し処理して、テキストに戻します。">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Structured Data — ユーザーガイド">
+    <meta property="og:description" content="TurboWarpでJSONとYAMLを扱う：名前付きの値、安全なパス、上限付きの繰り返し。">
+    <meta property="og:url" content="https://kubohiroya.github.io/turbowarp-structured-data/ja/">
+    <link rel="canonical" href="https://kubohiroya.github.io/turbowarp-structured-data/ja/">
+    <link rel="alternate" hreflang="en" href="https://kubohiroya.github.io/turbowarp-structured-data/">
+    <link rel="alternate" hreflang="ja" href="https://kubohiroya.github.io/turbowarp-structured-data/ja/">
+    <link rel="alternate" hreflang="x-default" href="https://kubohiroya.github.io/turbowarp-structured-data/">
+    <link rel="stylesheet" href="../assets/site.css">
+    <title>Structured Data — ユーザーガイド</title>
+    <style>h1,h2,h3{word-break:auto-phrase}</style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">本文へスキップ</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="./" aria-label="Structured Data ホーム">
+          <span class="brand-mark" aria-hidden="true">{ }</span>
+          <span class="brand-name">Structured Data</span>
+        </a>
+        <nav class="main-nav" aria-label="ガイドの目次">
+          <a href="#start">はじめに</a>
+          <a href="#flow">しくみ</a>
+          <a href="#paths">パス</a>
+          <a href="#loops">繰り返し</a>
+          <a href="#blocks">ブロック</a>
+          <a href="#help">困ったとき</a>
+          <a href="../#extension-block-reference" lang="en" hreflang="en">Reference</a>
+        </nav>
+        <a
+          class="github-link"
+          href="https://github.com/kubohiroya/turbowarp-structured-data"
+          aria-label="GitHubでソースコードを見る"
+        >
+          <img src="../assets/github-mark.svg" width="24" height="24" alt="">
+          <span class="github-link-label">GitHub</span>
+        </a>
+        <nav class="language-nav" aria-label="言語">
+          <a href="../" lang="en" hreflang="en">English</a>
+          <a href="./" lang="ja" hreflang="ja" aria-current="page">日本語</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="content" class="page-shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">TurboWarp カスタム機能拡張</p>
+          <h1 id="hero-title">文字列の切り貼りなしで、本物のデータを。</h1>
+          <p class="lede">
+            JSONやYAMLを一度読み込んで名前を付ければ、あとはそのまま扱えます。項目を1つ読む、値を1つ書き換える、リストを順に処理する、そして結果をテキストに戻す。文字列の分割や、複数のリストの同期に悩む必要はありません。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#start">準備する</a>
+            <a class="button button-secondary" href="#recipes">使用例を見る</a>
+          </div>
+        </div>
+        <div class="hero-visual" aria-label="例：YAMLをcfgとして読み込み、値を1つ変更し、JSONに戻す">
+          <div class="visual-window">
+            <div class="window-bar" aria-hidden="true">
+              <i></i><i></i><i></i><span>Structured Data</span>
+            </div>
+            <div class="scratch-stack">
+              <div class="scratch-block">
+                parse YAML <code>speed: 4</code> as <code>cfg</code>
+              </div>
+              <div class="scratch-block">
+                set <code>cfg</code> at path <code>$.speed</code> to JSON <code>6</code>
+              </div>
+              <div class="result-line">
+                <span>to JSON <code>cfg</code></span>
+                <span aria-hidden="true">→</span>
+                <span class="result-pill">{"speed":6}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="start" class="section" aria-labelledby="start-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 · はじめに</p>
+            <h2 id="start-title">3ステップで準備完了。</h2>
+          </div>
+          <p>
+            Structured Dataは明示的に有効にして使うプレビュー機能です。拡張を読み込む前に起動時フラグを設定したときだけブロックが表示されるので、既存のプロジェクトに意図せず影響することはありません。
+          </p>
+        </div>
+
+        <div class="step-grid">
+          <article class="step">
+            <span class="step-number">1</span>
+            <h3>機能フラグをオンにする</h3>
+            <p>
+              TurboWarpを動かしているページ（ブラウザーのコンソールや独自のホストページなど）で、拡張を読み込む<em>前に</em> <code>globalThis.STRUCTURED_DATA_MVP = true</code>
+              を実行します。
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-number">2</span>
+            <h3>拡張を読み込む</h3>
+            <p>
+              下のURLをカスタム拡張機能として追加し、
+              <strong>サンドボックスなしで実行する</strong>を選びます。
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-number">3</span>
+            <h3>最初の値を読み込む</h3>
+            <p>
+              <code>parse JSON [ ] as [data]</code> または
+              <code>parse YAML [ ] as [data]</code> をスクリプトに置いてクリックします。これで名前 <code>data</code> に値が入ります。
+            </p>
+          </article>
+        </div>
+
+        <div class="code-card" style="margin-top: 1rem">
+          <span class="code-label">バージョン固定の拡張URL</span>
+          <pre><code>https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-structured-data@0.6.2/dist/structured-data.js</code></pre>
+        </div>
+
+        <div class="callout" role="note" style="margin-top: 1rem">
+          <span class="callout-mark" aria-hidden="true">!</span>
+          <p>
+            <strong>サンドボックスなしの実行が必要です。</strong>スプライトとステージがそれぞれ自分の名前付きの値を持ち、繰り返しが実行中のスクリプトを追跡するため、TurboWarp VMへの直接アクセスが必要です。この拡張はネットワーク通信をせず、実行中のプロジェクト以外には何も保存しません。拡張ファイルは信頼できる配布元からのみ読み込んでください。
+          </p>
+        </div>
+      </section>
+
+      <section id="flow" class="section" aria-labelledby="flow-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">02 · しくみ</p>
+            <h2 id="flow-title">一度読み込み、名前で扱い、必要なときだけテキストに。</h2>
+          </div>
+          <p>
+            テキストを読み込むと、名前付きの値がスプライトの中に保持され、求めたときだけテキストに戻ります。その間、すべてのブロックはオブジェクト、配列、数値、文字列、真偽値、
+            <code>null</code> という実際の構造をそのまま扱います。
+          </p>
+        </div>
+
+        <figure class="diagram" aria-labelledby="flow-diagram-title">
+          <figcaption id="flow-diagram-title" class="diagram-title">
+            名前付きの値の一生
+          </figcaption>
+          <div class="flow">
+            <div class="flow-node">
+              <strong>JSON / YAML テキスト</strong>
+              <small>変数、リストの項目、ファイル、Webの応答など</small>
+            </div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-node flow-node-accent">
+              <strong>名前付きの値</strong>
+              <small><code>$.path</code> で読む・確かめる・書く・消す・繰り返す</small>
+            </div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-node flow-node-result">
+              <strong>JSON / YAML テキスト</strong>
+              <small>キーの順序が一定で、保存や送信にそのまま使える</small>
+            </div>
+          </div>
+        </figure>
+
+        <div class="two-column" style="margin-top: 1rem">
+          <article class="card">
+            <h3>名前はスプライトごと</h3>
+            <p>
+              スプライト1の <code>config</code> とステージの <code>config</code> は別の値です。同じ名前でもう一度読み込むと、値が置き換わります。
+            </p>
+          </article>
+          <article class="card">
+            <h3>値は停止するまで</h3>
+            <p>
+              名前付きの値はプロジェクトの実行中だけ存在します。停止ボタンで消え、プロジェクトファイルにも保存されません。後で使う場合は元のテキストを変数に残してください。
+            </p>
+          </article>
+        </div>
+
+        <div id="recipes" class="recipe-grid" style="margin-top: 1rem">
+          <article class="recipe">
+            <h3>設定値を読む</h3>
+            <div class="code-card">
+              <span class="code-label">ブロック</span>
+              <pre><code>parse JSON [{"level":{"speed":4}}] as [cfg]
+get JSON from [cfg] at path [$.level.speed]
+→ 4</code></pre>
+            </div>
+            <p>数値やテキストを入れる場所なら、どこでもこのレポーターを使えます。</p>
+          </article>
+          <article class="recipe">
+            <h3>書き換えて保存する</h3>
+            <div class="code-card">
+              <span class="code-label">ブロック</span>
+              <pre><code>set [save] at path [$.score] to JSON [120]
+set [save] at path [$.name] to JSON ["Mio"]
+[saved text] を (to JSON [save]) にする</code></pre>
+            </div>
+            <p>値はJSONなので、文字列には引用符が必要です。<code>Mio</code> ではなく <code>"Mio"</code>。</p>
+          </article>
+          <article class="recipe">
+            <h3>読む前に確かめる</h3>
+            <div class="code-card">
+              <span class="code-label">ブロック</span>
+              <pre><code>もし &lt;structured data [save] has path [$.items]?&gt; なら(length of array in [save] at path [$.items]) と言う</code></pre>
+            </div>
+            <p>先に確かめれば、データやパスがないことによるエラーを避けられます。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="paths" class="section" aria-labelledby="paths-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">03 · パス</p>
+            <h2 id="paths-title">ちょうど1か所を指す。</h2>
+          </div>
+          <p>
+            パスは値全体を表す <code>$</code> から始まり、キーまたは添字を1つずつたどります。どのパスも必ず1か所だけを指すように、あえて単純にしてあります。意図した以上の場所をブロックが変更することはありません。
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">パス</th>
+                <th scope="col">指す場所</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>$</code></td>
+                <td>値全体。</td>
+              </tr>
+              <tr>
+                <td><code>$.player.name</code></td>
+                <td>キー <code>player</code> の中のキー <code>name</code>。ドットで書けるキーは英字・数字・<code>_</code> からなり、数字で始まらないものです。</td>
+              </tr>
+              <tr>
+                <td><code>$.items[0]</code></td>
+                <td>配列 <code>items</code> の最初の項目。添字は0から数えます。</td>
+              </tr>
+              <tr>
+                <td><code>$["キー.ドット 入り"]</code></td>
+                <td>空白・ドット・日本語を含む任意のキー。引用符と角かっこで囲みます。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="syntax-layout" style="margin-top: 1rem">
+          <article class="syntax-list supported">
+            <h3><code>set</code> と <code>delete path</code> でできること</h3>
+            <ul>
+              <li><code>set</code> は値全体の置き換え、既存の配列項目の置き換え、既存オブジェクトのキーの追加・置き換えができます。</li>
+              <li>配列の項目を削除すると、後ろの項目が1つずつ前に詰まります。</li>
+              <li>変更は完全に成功したときだけ反映されます。失敗したブロックは値を変えません。</li>
+            </ul>
+          </article>
+          <article class="syntax-list rejected">
+            <h3>できないこと</h3>
+            <ul>
+              <li>存在しない親のオブジェクトや配列の自動作成。</li>
+              <li>配列の末尾より後ろへの追加。</li>
+              <li><code>$</code> の削除（代わりに <code>delete structured data</code> を使います）。</li>
+              <li>ワイルドカード、スライス、フィルター、再帰検索、式。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="loops" class="section" aria-labelledby="loops-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">04 · 繰り返し</p>
+            <h2 id="loops-title">すべての項目を、決まった順番で。</h2>
+          </div>
+          <p>
+            <code>for each in [ ] at path [ ] max [ ]</code> は、配列の項目またはオブジェクトのキーごとに中のブロックを1回ずつ実行します。ループの中では3つのレポーターで現在位置がわかります。
+          </p>
+        </div>
+
+        <div class="two-column">
+          <div class="code-card">
+            <span class="code-label">ブロック</span>
+            <pre><code>parse JSON [{"items":["apple","pear"]}] as [shop]
+for each in [shop] at path [$.items] max [100]
+  ((current index) と (current value JSON)) と言う
+→ 0"apple"   1"pear"</code></pre>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">レポーター</th>
+                  <th scope="col">ループの中で返す値</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>current key</code></td>
+                  <td>オブジェクトのキー、または配列の添字（文字列）。</td>
+                </tr>
+                <tr>
+                  <td><code>current index</code></td>
+                  <td>0から始まる回数。</td>
+                </tr>
+                <tr>
+                  <td><code>current value JSON</code></td>
+                  <td>現在の項目（JSON）。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-grid" style="margin-top: 1rem">
+          <article class="card">
+            <h3>いつも同じ順番</h3>
+            <p>配列は添字順、オブジェクトはUnicodeのコードポイント順にソートしたキーの順です。元のテキストの書き方に結果が左右されません。</p>
+          </article>
+          <article class="card">
+            <h3><code>max</code> は安全のための上限</h3>
+            <p>1〜1000の整数を指定します（既定は100）。項目数がこれを超えると、黙って一部を飛ばすのではなくエラーになります。</p>
+          </article>
+          <article class="card">
+            <h3>入れ子にできる</h3>
+            <p>ループの中に別のループを置けます。レポーターは常に、実行中のいちばん内側のループを表します。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="blocks" class="section" aria-labelledby="blocks-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">05 · ブロックの選び方</p>
+            <h2 id="blocks-title">やりたいことからブロックを選ぶ。</h2>
+          </div>
+          <p>
+            どのブロックも <code>NAME</code> で値を指定します。各引数と既定値は
+            <a href="../#extension-block-reference" lang="en" hreflang="en">Complete block reference</a>（英語）にあります。
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">やりたいこと</th>
+                <th scope="col">使うブロック</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>テキストを名前付きの値として読み込む</td>
+                <td><a href="../#block-parseJson"><code>parse JSON [ ] as [ ]</code></a>、<a href="../#block-parseYaml"><code>parse YAML [ ] as [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>値全体をテキストに戻す</td>
+                <td><a href="../#block-toJson"><code>to JSON [ ]</code></a>、<a href="../#block-toYaml"><code>to YAML [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>名前付きの値の有無を調べる・消す</td>
+                <td><a href="../#block-hasStructuredData"><code>structured data [ ] exists?</code></a>、<a href="../#block-deleteStructuredData"><code>delete structured data [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>1か所を読む・確かめる</td>
+                <td><a href="../#block-getJsonAtPath"><code>get JSON from [ ] at path [ ]</code></a>、<a href="../#block-hasPath"><code>structured data [ ] has path [ ]?</code></a></td>
+              </tr>
+              <tr>
+                <td>1か所を変更する</td>
+                <td><a href="../#block-setJsonAtPath"><code>set [ ] at path [ ] to JSON [ ]</code></a>、<a href="../#block-deleteAtPath"><code>delete path [ ] from [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>コレクションを調べる</td>
+                <td><a href="../#block-keysAtPath"><code>keys in [ ] at path [ ]</code></a>（ソート済み、JSON配列）、<a href="../#block-lengthAtPath"><code>length of array in [ ] at path [ ]</code></a></td>
+              </tr>
+              <tr>
+                <td>項目ごとに繰り返す</td>
+                <td><a href="../#block-forEachAtPath"><code>for each in [ ] at path [ ] max [ ]</code></a> と <a href="../#block-currentKey"><code>current key</code></a>、<a href="../#block-currentIndex"><code>current index</code></a>、<a href="../#block-currentValueJson"><code>current value JSON</code></a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="safety" class="section" aria-labelledby="safety-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">06 · 制限と安全性</p>
+            <h2 id="safety-title">入力は厳格に、出力は予測どおりに。</h2>
+          </div>
+          <p>
+            Structured Dataは純粋なデータだけを受け付け、推測せずにはっきりと失敗します。大きな入力や特殊な入力でプロジェクトが固まったり、意味が変わったりするのを防ぎます。
+          </p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <h3>サイズの上限</h3>
+            <p>1回の読み込みで、テキストは256 KiBまで、入れ子は64段まで、値の総数は50,000個までです。</p>
+          </article>
+          <article class="card">
+            <h3>安全なYAML</h3>
+            <p>エイリアス、未知のタグ、重複キー、文字列以外のキー、未対応のスカラー型、パーサーの警告は拒否します。</p>
+          </article>
+          <article class="card">
+            <h3>安定した出力</h3>
+            <p><code>to JSON</code> と <code>to YAML</code> は常にキーをソートします。同じデータからは同じテキストが得られるので、比較・保存・送信が簡単です。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="editors" class="section" aria-labelledby="editors-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">07 · オプションの連携機能</p>
+            <h2 id="editors-title">編集フォームと共有Named Data。</h2>
+          </div>
+          <p>
+            以下の機能は既定でオフで、通常の利用には必要ありません。対応したTurboWarpビルドやホストでのみ有効にしてください。
+          </p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <h3>Source/Formエディター</h3>
+            <p>
+              GUIの起動オプション <code>blockEditorDialogs=1</code> と
+              <code>blockEditorSourceForms=1</code> を指定すると、<code>parse JSON</code>、
+              <code>parse YAML</code>、<code>set … to JSON</code> のJSON/YAML入力を、ソーステキストとフォームを切り替えられるエディターで編集できます。変更していないテキストは書いたとおりに保たれ、ブロックが拒否する入力は保存できません。
+            </p>
+          </article>
+          <article class="card">
+            <h3><code>max</code> の固定入力エディター</h3>
+            <p>
+              <code>blockEditorDialogs</code> と <code>blockEditorFixedInputs</code> の両方をオンにして再読み込みすると、<code>for each</code> の <code>max</code> を1〜1000の整数で編集するフォームが使えます。入力途中・空白・有限でない新しい値は保存できず、NAMEとPATHは変更しません。既存の値は編集しない限り書き換えず、接続したレポーターは評価しません。
+            </p>
+          </article>
+          <article class="card">
+            <h3>Named Dataプロバイダー</h3>
+            <p>
+              <code>globalThis.NAMED_DATA_REGISTRY_MVP = true</code> を設定すると、名前付きの値が共有の <a href="https://kubohiroya.github.io/turbowarp-named-data/">Named Data</a>
+              レジストリを通じて <code>structured</code> データとして他の拡張にも提供されます。
+              <code>__TW_NAMED_DATA_FEATURE_FLAGS__ = {NAMED_DATA_SCHEMA_REF: true}</code>
+              を加えると、Schemaの識別情報も受け渡します。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="help" class="section" aria-labelledby="help-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">08 · 困ったとき</p>
+            <h2 id="help-title">ブロックが期待どおりに動かないとき。</h2>
+          </div>
+          <p>
+            多くの問題は、起動時フラグ、JSONの引用符、停止による値の消去が原因です。ブロックが失敗すると下の安定したエラーコードのいずれかを報告し、名前付きの値は元のまま残ります。
+          </p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <h3>パレットが空になっている</h3>
+            <p>
+              先に <code>globalThis.STRUCTURED_DATA_MVP = true</code> を設定してから、拡張を読み込み直してください。フラグは起動時に1回だけ読み取られます。
+            </p>
+          </article>
+          <article class="card">
+            <h3>文字列が引用符付きで返ってくる</h3>
+            <p>
+              <code>get JSON</code> はJSONを返すため、文字列 <code>Mio</code> は
+              <code>"Mio"</code> として返ります。保存するときも引用符を付けます：
+              <code>set … to JSON ["Mio"]</code>。
+            </p>
+          </article>
+          <article class="card">
+            <h3>停止後に「DATA_NOT_FOUND」</h3>
+            <p>
+              停止するとすべての名前付きの値が消えます。<em>緑の旗が押されたとき</em>のスクリプトでもう一度読み込んでください。
+            </p>
+          </article>
+          <article class="card">
+            <h3>別のスプライトからデータが見えない</h3>
+            <p>
+              名前は読み込みを実行したスプライトまたはステージに属します。必要なスプライトごとに読み込むか、JSONテキストを全体用の変数で受け渡してください。
+            </p>
+          </article>
+          <article class="card">
+            <h3>set で「PATH_NOT_FOUND」</h3>
+            <p>
+              <code>set</code> は存在しない親を作りません。先に親を作ってから（例：
+              <code>$.player</code> を <code>{}</code> に）、<code>$.player.name</code> を設定します。
+            </p>
+          </article>
+          <article class="card">
+            <h3>「ITERATION_LIMIT_EXCEEDED」</h3>
+            <p>
+              コレクションが <code>max</code> より大きいためです。<code>max</code> を（1000まで）増やすか、データのより小さな部分を対象にしてください。
+            </p>
+          </article>
+        </div>
+
+        <div class="table-wrap" style="margin-top: 1rem">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">エラーコード</th>
+                <th scope="col">意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>INVALID_JSON</code> / <code>INVALID_YAML</code></td><td>テキストを解析できないか、許可されていないYAMLの機能を使っています。</td></tr>
+              <tr><td><code>PARSE_LIMIT_EXCEEDED</code></td><td>テキストのサイズ、深さ、値の数が上限を超えています。</td></tr>
+              <tr><td><code>INVALID_NAME</code></td><td>名前が空か、空白だけです。</td></tr>
+              <tr><td><code>DATA_NOT_FOUND</code></td><td>このスプライトにその名前の値がありません。</td></tr>
+              <tr><td><code>INVALID_PATH</code></td><td>パスが対応している書き方になっていません。</td></tr>
+              <tr><td><code>PATH_NOT_FOUND</code></td><td>パス、またはその親が存在しません。</td></tr>
+              <tr><td><code>TYPE_MISMATCH</code></td><td>配列を期待した場所に数値があるなど、型が異なります。</td></tr>
+              <tr><td><code>INDEX_OUT_OF_RANGE</code></td><td>配列の添字が末尾を超えています。</td></tr>
+              <tr><td><code>ITERATION_LIMIT_EXCEEDED</code></td><td>コレクションの項目数が <code>max</code> を超えています。</td></tr>
+              <tr><td><code>ITERATION_CONTEXT_REQUIRED</code></td><td><code>current …</code> レポーターを <code>for each</code> ループの外で使いました。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <p>Structured Data 0.6.2 · MPL-2.0</p>
+        <div class="footer-links">
+          <a href="https://www.npmjs.com/package/@kubohiroya/turbowarp-structured-data">npm</a>
+          <a href="https://github.com/kubohiroya/turbowarp-structured-data/blob/main/docs/architecture.ja.md">アーキテクチャ</a>
+          <a href="https://github.com/kubohiroya/turbowarp-structured-data/issues">問題を報告する</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
