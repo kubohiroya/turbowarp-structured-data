@@ -1,4 +1,3 @@
-import {compileSchemaBundle, validateSchemaInput} from '@kubohiroya/turbowarp-extension-data-editor/schema';
 import type {SchemaBundle, SchemaDocument, SchemaJsonValue, SourceBinding, SourceEditorOptions} from '@kubohiroya/turbowarp-extension-data-editor/schema';
 
 export function canonicalBundle(ownerId: string, contractId: string, document: SchemaDocument, ownerSource: {path: string; symbol: string}): SchemaBundle {
@@ -16,21 +15,25 @@ export function canonicalBundle(ownerId: string, contractId: string, document: S
 export function sourceBinding(argument: string, bundle: SchemaBundle,
   read: (source: string) => unknown, check: (source: string) => unknown = read,
   format: 'json' | 'yaml' = 'json', uiSchema?: SourceBinding['variants'][number]['uiSchema']): SourceBinding {
-  const compiled = compileSchemaBundle(bundle);
   return {
     argument,
     variants: [{variantId: 'default', format, schemaBundle: bundle, ...(uiSchema ? {uiSchema} : {})}],
     decode(source) {return {source, format, variantId: 'default', data: read(source) as SchemaJsonValue};},
     validateSource(source, context) {
-      if (compiled.kind !== 'compiled') return {source, result: {kind: 'schema-error', diagnostics: [{code: 'source-schema-invalid'}]}};
+      try {read(source);}
+      catch {return {source, result: {kind: 'invalid', diagnostics: [{code: 'source-decode-invalid'}]}};}
       try {
-        const data = read(source) as SchemaJsonValue;
-        return {source, result: validateSchemaInput(compiled.validator, data, {context,
-          ownerValidate: () => {
-            try {check(source); return {kind: 'valid', issues: []};}
-            catch {return {kind: 'invalid', issues: [{dataPath: '', ruleId: 'source-owner-invalid'}]};}
-          }})};
-      } catch {return {source, result: {kind: 'invalid', diagnostics: [{code: 'source-decode-invalid'}]}};}
+        const descriptors = Object.getOwnPropertyDescriptors(context);
+        if (typeof descriptors.consumerId?.value !== 'string' ||
+            typeof descriptors.nowMs?.value !== 'number' || !Number.isFinite(descriptors.nowMs.value) ||
+            !descriptors.settings || !('value' in descriptors.settings)) {
+          return {source, result: {kind: 'execution-error', diagnostics: [{code: 'owner-context-invalid'}]}};
+        }
+      } catch {return {source, result: {kind: 'execution-error', diagnostics: [{code: 'owner-context-invalid'}]}};}
+      // The GUI checks Schema constraints; the owner checks the exact source without compiling.
+      try {check(source);}
+      catch {return {source, result: {kind: 'invalid', diagnostics: [{code: 'source-owner-invalid'}]}};}
+      return {source, result: {kind: 'valid', diagnostics: []}};
     }
   };
 }

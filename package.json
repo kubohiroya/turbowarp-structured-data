@@ -32,7 +32,8 @@
     "README.md",
     "README.ja.md",
     "THIRD_PARTY_NOTICES.md",
-    "LICENSE"
+    "LICENSE",
+    "lib-editor/"
   ],
   "publishConfig": {
     "access": "public",
@@ -45,8 +46,8 @@
   "scripts": {
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
-    "build": "vite build",
-    "lint": "eslint src tests scripts vite.config.ts eslint.config.ts",
+    "build": "vite build && pnpm run build:editor",
+    "lint": "eslint src tests scripts vite.config.ts vite.editor.config.ts eslint.config.ts",
     "test": "vitest run",
     "docs": "node scripts/generate-readme.ts && node scripts/generate-fixed-input-docs.mjs",
     "docs:check": "node scripts/generate-readme.ts --check && node scripts/generate-fixed-input-docs.mjs --check",
@@ -54,7 +55,8 @@
     "repo:check": "node scripts/check-repo.ts",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run docs:check && pnpm run check:dist && pnpm run repo:check && pnpm run pack:check",
-    "check:dist": "pnpm run build && node scripts/check-dist.ts"
+    "check:dist": "pnpm run build && node scripts/check-dist.ts",
+    "build:editor": "tsc -p tsconfig.editor.json && vite build --config vite.editor.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -69,11 +71,11 @@
     "vite": "^8.2.2",
     "vitest": "^5.0.0",
     "react-dom": "18.3.1",
+    "@kubohiroya/turbowarp-extension-data-editor": "0.2.1",
     "@kubohiroya/turbowarp-named-functions": "0.1.1"
   },
   "dependencies": {
-    "yaml": "^2.9.1",
-    "@kubohiroya/turbowarp-extension-data-editor": "0.2.1"
+    "yaml": "^2.9.1"
   },
   "peerDependencies": {
     "@kubohiroya/turbowarp-named-data": ">=0.4.0 <1"
@@ -83,5 +85,12 @@
     "revision": "7429d0707e0c46099fa89d09f456a43a29919395",
     "revisionRole": "base-commit",
     "sourceState": "local-release-overlay"
+  },
+  "exports": {
+    "./*": "./*",
+    "./editor-metadata": {
+      "types": "./lib-editor/src/editor-metadata.d.ts",
+      "import": "./lib-editor/src/editor-metadata.js"
+    }
   }
 }

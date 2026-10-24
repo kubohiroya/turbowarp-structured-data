@@ -1,0 +1,34 @@
+export declare const STRUCTURED_DATA_ERROR_CODES: readonly ["INVALID_JSON", "INVALID_YAML", "INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "ITERATION_LIMIT_EXCEEDED", "ITERATION_CONTEXT_REQUIRED", "PARSE_LIMIT_EXCEEDED"];
+export type StructuredDataErrorCode = (typeof STRUCTURED_DATA_ERROR_CODES)[number];
+export type JsonPrimitive = null | boolean | number | string;
+export type JsonValue = JsonPrimitive | JsonValue[] | {
+    [key: string]: JsonValue;
+};
+export type PathSegment = {
+    kind: 'key';
+    value: string;
+} | {
+    kind: 'index';
+    value: number;
+};
+export declare class StructuredDataError extends Error {
+    readonly code: StructuredDataErrorCode;
+    constructor(code: StructuredDataErrorCode, message: string);
+}
+export declare function parseJson(text: unknown): JsonValue;
+export declare function isValidJson(text: unknown): boolean;
+export declare function normalizeJson(text: unknown): string;
+export declare function stringifyJson(value: JsonValue): string;
+export declare function parsePath(input: unknown): PathSegment[];
+export declare function getAtPath(root: JsonValue, segments: readonly PathSegment[]): JsonValue;
+export declare function hasAtPath(root: JsonValue, segments: readonly PathSegment[]): boolean;
+export declare function setAtPath(root: JsonValue, segments: readonly PathSegment[], replacement: JsonValue): JsonValue;
+export declare function deleteAtPath(root: JsonValue, segments: readonly PathSegment[]): JsonValue;
+export declare function keysAtPath(root: JsonValue, segments: readonly PathSegment[]): string[];
+export declare function lengthAtPath(root: JsonValue, segments: readonly PathSegment[]): number;
+export interface IterationEntry {
+    key: string;
+    value: JsonValue;
+}
+export declare function iterationEntries(root: JsonValue, segments: readonly PathSegment[], maximum: number): IterationEntry[];
+export declare function compareUnicodeCodePoints(left: string, right: string): number;

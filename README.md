@@ -4,6 +4,8 @@
 
 Named structured data with safe JSON/YAML codecs, deterministic path operations, bounded iteration, and a server compiler contract.
 
+Editor metadata and pure owner validation are available through `./editor-metadata`; the common GUI owns Schema compilation and Ajv. See [the runtime/editor boundary](docs/editor-runtime-boundary.ja.md) for compatibility and rollback details.
+
 ## What it does
 
 - parses JSON or YAML into a target-local named namespace;

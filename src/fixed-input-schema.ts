@@ -1,5 +1,5 @@
 import type {SchemaBundle} from '@kubohiroya/turbowarp-extension-data-editor/schema';
-import document from '../schemas/block-editor-fixed-inputs.schema.json';
+import document from '../schemas/block-editor-fixed-inputs.schema.json' with {type: 'json'};
 
 const source = {repository: 'turbowarp-structured-data', path: 'schemas/block-editor-fixed-inputs.schema.json',
   symbol: '#/$defs/forEachAtPath/properties/MAX'};
