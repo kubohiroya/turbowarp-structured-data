@@ -4,6 +4,9 @@
 
 名前付き構造化データ、安全なJSON/YAML codec、決定的なpath操作、上限付き反復、server compiler契約を提供するTurboWarp機能拡張です。
 
+編集metadataとpure owner検証は`./editor-metadata`で公開し、編集用Schema compileとAjvは共通GUIが担当します。
+再生用JSには編集エンジンを同梱しません。[編集とruntimeの境界](docs/editor-runtime-boundary.ja.md)を参照してください。
+
 ## できること
 
 - JSONまたはYAMLをtarget-localな名前付きnamespaceへparse

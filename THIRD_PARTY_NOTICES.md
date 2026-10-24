@@ -9,6 +9,15 @@ Copyright Hiroya Kubo
 Licensed under the Mozilla Public License 2.0. The canonical source and package are available at
 <https://github.com/kubohiroya/turbowarp-named-data>.
 
+## @kubohiroya/turbowarp-extension-data-editor (pure helpers)
+
+Copyright Hiroya Kubo
+
+The JSON value Schema declaration and fixed numeric input parser are inlined from this package.
+Licensed under the Mozilla Public License 2.0. Canonical source:
+<https://github.com/kubohiroya/turbowarp-extension-data-editor>.
+The editor engine, Ajv and React/RJSF are excluded from the playback and metadata bundles.
+
 ## yaml
 
 Copyright Eemeli Aro <eemeli@gmail.com>

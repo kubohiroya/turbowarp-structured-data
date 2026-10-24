@@ -23,6 +23,15 @@ export default defineConfig({
     }),
     {
       name: 'stable-generated-region-comments',
+      generateBundle(_options, bundle) {
+        for (const output of Object.values(bundle)) {
+          if (output.type !== 'chunk') continue;
+          const editorEngine = Object.keys(output.modules).find(id =>
+            /\/node_modules\/(?:.*\/)?(?:ajv|ajv-formats|fast-uri|react|react-dom|@rjsf\/[^/]+)(?:\/|$)/u.test(id) ||
+            /\/turbowarp-extension-data-editor\/dist\/(?:schema-engine|schema-compose|schema-view|source-editor|fixed-input-editor)\.js$/u.test(id));
+          if (editorEngine) this.error(`Structured Data runtime includes an editor engine: ${editorEngine}`);
+        }
+      },
       renderChunk(code) {
         // Generated module paths depend on the package store and checkout location.
         // Preserve license comments and executable code while omitting region markers.

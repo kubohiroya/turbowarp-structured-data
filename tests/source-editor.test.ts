@@ -2,7 +2,7 @@ import {createBlockEditorService} from '@kubohiroya/turbowarp-extension-data-edi
 import type {BlockEditorHost, BlockSnapshot, JsonObject, LiteralArgumentChange} from '@kubohiroya/turbowarp-extension-data-editor';
 import {describe, expect, it} from 'vitest';
 import {sourceEditorDefinitions} from '../src/editor-schema.js';
-import {registerSourceEditors} from '../src/source-editor.js';
+import {canonicalBundle, registerSourceEditors, sourceBinding} from '../src/source-editor.js';
 const context = {consumerId: 'regression', nowMs: 1, settings: null};
 describe('source form contracts', () => {
  it('matches existing owner acceptance without replacing raw values', () => {
@@ -63,6 +63,41 @@ const json = sourceEditorDefinitions[0]!.bindings[0]!;
 });
 
 describe('prepared source service integration', () => {
+ it('delegates Schema constraints to the GUI while keeping the owner callback engine-free', async () => {
+  const bundle = canonicalBundle('turbowarp-structured-data', 'required-name',
+   {type: 'object', required: ['name'], properties: {name: {type: 'string'}}},
+   {path: 'src/core.ts', symbol: 'parseJson'});
+  const binding = sourceBinding('TEXT', bundle, JSON.parse);
+  expect(binding.validateSource('{}', context).result.kind).toBe('valid');
+  const service = createBlockEditorService();
+  const remove = registerSourceEditors({gui: {blockEditors: service.api}}, [{
+   apiVersion: 1, extensionId: 'test', editorId: 'required-name', opcodes: ['test_parse'],
+   bindings: [binding], validationContext: () => context
+  }]);
+  let commits = 0;
+  const snapshot: BlockSnapshot = {targetId: 'sprite', blockId: 'block', opcode: 'test_parse', revision: '1',
+   arguments: {TEXT: {kind: 'literal', value: '{"name":"original"}'}}};
+  const session = service.registry.open(snapshot, {readBlock: () => snapshot, commit: () => {commits++;}})!;
+  session.setDraft({sources: {TEXT: {mode: 'source', source: '{}', sourceEdited: true}}});
+  expect((await session.save()).status).toBe('invalid');
+  expect(commits).toBe(0);
+  session.setDraft({sources: {TEXT: {mode: 'source', source: '{"name":"updated"}', sourceEdited: true}}});
+  expect(await session.save()).toEqual({status: 'saved', changed: true});
+  expect(commits).toBe(1);
+  session.dispose();remove();
+ });
+
+ it('rejects malformed owner contexts without invoking their accessors', () => {
+  let reads = 0;
+  const invalid = Object.defineProperty({...context}, 'consumerId', {get() {reads++;throw Error('private-context');}});
+  for (const value of [invalid, null, undefined, {...context, nowMs: NaN}]) {
+   const result = sourceEditorDefinitions[0]!.bindings[0]!.validateSource('{}', value as never);
+   expect(result.result.kind).toBe('execution-error');
+   expect(JSON.stringify(result.result)).not.toContain('private-context');
+  }
+  expect(reads).toBe(0);
+ });
+
  function fixture() {
   const definition = sourceEditorDefinitions[0]!;
   const input: Record<string, string> = {TEXT: '{ "keep":[1,1], "value":1 }'};
