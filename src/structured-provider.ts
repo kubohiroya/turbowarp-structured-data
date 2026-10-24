@@ -1,4 +1,5 @@
 import {renderJsonDocument, renderYamlDocument} from './codecs.js';
+import {isNamedDataSchemaRefEnabled} from './config.js';
 import type {JsonValue} from './core.js';
 import {
   NamedDataError,
@@ -6,6 +7,7 @@ import {
   type NamedDataMetadata,
   type NamedDataProvider,
   type NamedDataReference,
+  type NamedDataSchemaRef,
   type NamedDataRepresentation,
   type NamedDataResolveContext
 } from '@kubohiroya/turbowarp-named-data/composition';
@@ -17,6 +19,7 @@ export interface StructuredDataBinding {
   value: JsonValue;
   revision: number;
   nativeRepresentation: 'json' | 'yaml';
+  schemaRef?: NamedDataSchemaRef;
 }
 
 export interface StructuredDataBindingStore {
@@ -31,7 +34,8 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
 
   public constructor(
     private readonly store: StructuredDataBindingStore,
-    private readonly maxBodyBytes = STRUCTURED_BODY_MAX_BYTES
+    private readonly maxBodyBytes = STRUCTURED_BODY_MAX_BYTES,
+    private readonly schemaRefEnabled = isNamedDataSchemaRefEnabled()
   ) {}
 
   public canResolve(
@@ -57,7 +61,8 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
       resolved.nativeRepresentation,
       representation,
       resolved.bytes.byteLength,
-      resolved.revision
+      resolved.revision,
+      resolved.schemaRef
     );
   }
 
@@ -76,7 +81,8 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
         resolved.nativeRepresentation,
         representation,
         resolved.bytes.byteLength,
-        resolved.revision
+        resolved.revision,
+        resolved.schemaRef
       ),
       body: resolved.bytes,
       release: () => {
@@ -100,7 +106,12 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
     reference: NamedDataReference,
     representation: NamedDataRepresentation,
     context: NamedDataResolveContext
-  ): {bytes: Uint8Array; revision: number; nativeRepresentation: 'json' | 'yaml'} {
+  ): {
+    bytes: Uint8Array;
+    revision: number;
+    nativeRepresentation: 'json' | 'yaml';
+    schemaRef?: NamedDataSchemaRef;
+  } {
     if (this.released) {
       throw new NamedDataError('NAMED_DATA_PROVIDER_RELEASED', 'The structured provider was released.');
     }
@@ -111,6 +122,23 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
       throw new NamedDataError(
         'NAMED_DATA_NOT_FOUND',
         `Structured data does not exist: ${reference.name}`
+      );
+    }
+    const requestedSchemaRef = reference.schemaRef;
+    if (requestedSchemaRef !== undefined && !this.schemaRefEnabled) {
+      throw new NamedDataError(
+        'NAMED_DATA_SCHEMA_UNRESOLVED',
+        'Schema reference resolution is disabled.'
+      );
+    }
+    if (
+      requestedSchemaRef !== undefined &&
+      (binding.schemaRef?.id !== requestedSchemaRef.id ||
+        binding.schemaRef?.version !== requestedSchemaRef.version)
+    ) {
+      throw new NamedDataError(
+        'NAMED_DATA_SCHEMA_VERSION_MISMATCH',
+        'Binding schemaRef does not match the requested reference.'
       );
     }
     const text = this.render(binding.value, representation);
@@ -125,7 +153,8 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
     return {
       bytes,
       revision: binding.revision,
-      nativeRepresentation: binding.nativeRepresentation
+      nativeRepresentation: binding.nativeRepresentation,
+      ...(requestedSchemaRef === undefined ? {} : {schemaRef: binding.schemaRef})
     };
   }
 
@@ -164,7 +193,8 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
     nativeRepresentation: 'json' | 'yaml',
     representation: NamedDataRepresentation,
     byteLength: number,
-    revision: number
+    revision: number,
+    schemaRef?: NamedDataSchemaRef
   ): NamedDataMetadata {
     return {
       reference: {...reference},
@@ -176,7 +206,8 @@ export class StructuredDataNamedDataProvider implements NamedDataProvider {
           : 'application/yaml; charset=utf-8',
       byteLength,
       revision: String(revision),
-      replayable: true
+      replayable: true,
+      ...(schemaRef === undefined ? {} : {schemaRef})
     };
   }
 

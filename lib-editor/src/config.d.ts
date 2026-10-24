@@ -1,5 +1,11 @@
 export declare const STRUCTURED_DATA_MVP_DEFAULT = false;
 export declare const NAMED_DATA_REGISTRY_MVP_DEFAULT = false;
+export declare const NAMED_DATA_SCHEMA_REF_DEFAULT = false;
+export declare function isNamedDataSchemaRefEnabled(source?: {
+    __TW_NAMED_DATA_FEATURE_FLAGS__?: {
+        NAMED_DATA_SCHEMA_REF?: unknown;
+    };
+}): boolean;
 export declare function isStructuredDataMvpEnabled(source?: {
     STRUCTURED_DATA_MVP?: unknown;
 }): boolean;

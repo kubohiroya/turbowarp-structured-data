@@ -22,10 +22,22 @@ The `STRUCTURED_DATA_MVP` feature flag is fixed at extension startup and default
 
 JSON and YAML input is limited to 256 KiB, nesting depth 64, and 50,000 values. YAML aliases, warnings, unknown tags, duplicate keys, non-string map keys, and unsupported scalar types are rejected.
 
+The structured-data provider can carry a binding's optional `schemaRef` through named-data 0.4.0.
+The ID must match `^[a-z][a-z0-9.-]{0,127}$` and the version must be a complete SemVer version.
+Schema identity resolution is a startup-fixed opt-in and defaults to `false`; configure
+`globalThis.__TW_NAMED_DATA_FEATURE_FLAGS__ = {NAMED_DATA_SCHEMA_REF: true}` before loading the
+provider. A request must match the binding's stable ID and full SemVer version exactly. The
+provider does not store schema documents or choose a fallback version. Consumers resolve the
+identity in their own schema catalog and validate the returned value with their existing JSON
+Schema implementation. The agreed subset is `type`, `properties`, `required`,
+`additionalProperties` (boolean), `items`, `enum`, `const`, numeric bounds, and string/array
+length bounds; unsupported keywords do not add validation behavior. Turn the flag off to
+immediately return to metadata without schema identities.
+
 ## Installation
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.6.1
+pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.6.2
 ```
 
 ## Quick start

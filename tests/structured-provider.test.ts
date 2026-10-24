@@ -1,11 +1,13 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import fixture from './fixtures/named-data-provider-contract.json';
 import {StructuredDataExtension} from '../src/extension.js';
-import {isNamedDataRegistryMvpEnabled} from '../src/config.js';
+import {isNamedDataRegistryMvpEnabled, isNamedDataSchemaRefEnabled} from '../src/config.js';
 import {
+  installNamedDataRegistry,
   NamedDataError,
   type NamedDataReference
 } from '@kubohiroya/turbowarp-named-data/composition';
+import {validateAgainstSchema} from '@kubohiroya/turbowarp-named-functions/composition';
 import {
   StructuredDataNamedDataProvider,
   type StructuredDataBinding
@@ -48,6 +50,56 @@ describe('structured named data provider contract', () => {
     expect(isNamedDataRegistryMvpEnabled({})).toBe(false);
     expect(isNamedDataRegistryMvpEnabled({NAMED_DATA_REGISTRY_MVP: true})).toBe(true);
     expect(new StructuredDataExtension(true, false).getNamedDataProvider()).toBeUndefined();
+  });
+
+  it('keeps schema reference resolution disabled by default', () => {
+    expect(isNamedDataSchemaRefEnabled({})).toBe(false);
+    expect(isNamedDataSchemaRefEnabled({__TW_NAMED_DATA_FEATURE_FLAGS__: {NAMED_DATA_SCHEMA_REF: true}})).toBe(true);
+  });
+
+  it('composes versioned schema identity from the provider through the registry to a named-functions consumer', async () => {
+    const target = {};
+    const schemaRef = {id: 'com.example.profile', version: '1.0.0'};
+    const binding: StructuredDataBinding = {
+      value: {name: 'Ada'}, revision: 9, nativeRepresentation: 'json', schemaRef
+    };
+    const provider = new StructuredDataNamedDataProvider(
+      {get: (candidate, name) => candidate === target && name === 'data' ? binding : undefined},
+      undefined,
+      true
+    );
+    const registry = installNamedDataRegistry({});
+    registry.registerProvider(provider);
+    const schemaBoundReference = reference({schemaRef});
+    const schemaCatalog = new Map([
+      ['com.example.profile@1.0.0', {
+        type: 'object',
+        properties: {name: {type: 'string'}},
+        required: ['name'],
+        additionalProperties: false
+      }]
+    ]);
+
+    const opened = await registry.openBody(schemaBoundReference, 'json', {target});
+    expect(opened.schemaRef).toEqual(schemaRef);
+    expect(opened.reference.schemaRef).toEqual(schemaRef);
+    const schema = schemaCatalog.get(`${opened.schemaRef?.id}@${opened.schemaRef?.version}`);
+    expect(schema).toBeDefined();
+    const value: unknown = JSON.parse(text(opened.body));
+    expect(validateAgainstSchema(value, schema)).toEqual([]);
+    expect(validateAgainstSchema({name: 1}, schema)).not.toEqual([]);
+    await opened.release();
+
+    const disabledProvider = new StructuredDataNamedDataProvider(
+      {get: (candidate, name) => candidate === target && name === 'data' ? binding : undefined}
+    );
+    expect(() => disabledProvider.stat(schemaBoundReference, 'json', {target})).toThrowError(
+      expect.objectContaining({code: 'NAMED_DATA_SCHEMA_UNRESOLVED'})
+    );
+
+    await expect(
+      registry.stat(reference({schemaRef: {...schemaRef, version: '2.0.0'}}), 'json', {target})
+    ).rejects.toMatchObject({code: 'NAMED_DATA_SCHEMA_VERSION_MISMATCH'});
   });
 
   it('resolves canonical JSON and YAML as replayable UTF-8 bodies', () => {
