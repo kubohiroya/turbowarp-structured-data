@@ -20,6 +20,8 @@ namespaceとloop contextがTurboWarp BlockUtilityのtarget/thread identityを使
 
 JSON/YAML入力は256 KiB、深さ64、50,000 valueまでです。YAML alias、warning、unknown tag、duplicate key、string以外のmap key、未対応scalarは拒否します。
 
+structured-data providerはnamed-data 0.4.0を介してbindingの任意の`schemaRef`を伝播できます。IDは`^[a-z][a-z0-9.-]{0,127}$`に一致し、versionは完全なSemVerである必要があります。Schema identityの解決は起動時固定で、明示的に有効化するまで既定OFFです。provider読み込み前に`globalThis.__TW_NAMED_DATA_FEATURE_FLAGS__ = {NAMED_DATA_SCHEMA_REF: true}`を設定します。参照はbindingの安定IDと完全なSemVer versionに一致する必要があります。providerはSchema本体を保持せず、別versionへのfallbackもしません。consumerは自身のSchema catalogでidentityを解決し、既存のJSON Schema実装で値を検証します。合意するsubsetは`type`、`properties`、`required`、Boolean形式の`additionalProperties`、`items`、`enum`、`const`、数値範囲、文字列／配列の長さ制約です。未対応keywordは検証動作を追加しません。flagをOFFにすればschema identityなしのmetadataへ即時に戻せます。
+
 ## クイックスタート
 
 ```text

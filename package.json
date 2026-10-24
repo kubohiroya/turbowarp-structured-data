@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": "Hiroya Kubo <hiroya@cuc.ac.jp>",
   "license": "MPL-2.0",
@@ -58,7 +58,8 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@kubohiroya/turbowarp-extension-manifest": "0.3.0",
-    "@kubohiroya/turbowarp-named-data": "0.1.0",
+    "@kubohiroya/turbowarp-named-data": "0.4.0",
+    "@kubohiroya/turbowarp-named-functions": "0.1.1",
     "@kubohiroya/vite-plugin-turbowarp-extension": "0.3.0",
     "@types/node": "^24.13.3",
     "eslint": "^9.39.5",
@@ -72,6 +73,6 @@
     "yaml": "^2.9.1"
   },
   "peerDependencies": {
-    "@kubohiroya/turbowarp-named-data": ">=0.1.0 <1"
+    "@kubohiroya/turbowarp-named-data": ">=0.4.0 <1"
   }
 }
