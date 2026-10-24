@@ -197,15 +197,15 @@ site and `blockIconURI` remains a `data:image/svg+xml;base64,...` URI.
 Third-party components, when present, are listed in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-## 固定引数の編集フォーム（S3-4）
+## Fixed-input editor form (S3-4)
 
-共通エディターの起動時フラグ `blockEditorFixedInputs` とDialogsがONのGUIでは、`forEachAtPath` の `MAX` だけを固定フォームとして登録します。旧GUI・フラグOFFでは追加登録を行いません。Schemaの正本は `schemas/block-editor-fixed-inputs.schema.json#/$defs/forEachAtPath/properties/MAX`、codecと登録は `src/fixed-input-editors.ts` です。既存raw値・未変更alias・未知enumは無操作保存で書き換えず、reporterを評価しません。明示変更だけを検査し、他の引数やブロック宣言、保存形式を変更しません。
+When the shared editor's startup flag `blockEditorFixedInputs` and Dialogs are both on in the GUI, the extension registers a fixed form for `forEachAtPath`'s `MAX` input only. Older GUIs, or a GUI with the flag off, get no extra registration. The canonical Schema is `schemas/block-editor-fixed-inputs.schema.json#/$defs/forEachAtPath/properties/MAX`; the codec and registration live in `src/fixed-input-editors.ts`. Saving without changes never rewrites existing raw values, unchanged aliases, or unknown enum values, and connected reporters are never evaluated. Only explicit changes are validated; other arguments, block declarations, and the saved format are unchanged.
 
-MAXは整数1〜1000です。新しい入力には共通の有限数値token規則も適用し、途中入力を保存しません。MVP flagがOFFなら登録せず、NAME/PATH・staticLiteral由来の接続可否を変更しません。
+`MAX` is an integer from 1 to 1000. New input also follows the shared finite-number token rule, and partial input is not saved. When the MVP flag is off nothing is registered, and whether `NAME`/`PATH` accept connected reporters (derived from `staticLiteral`) does not change.
 
-登録はoptional API（apiVersion:1）に限定し、RUNTIME_DISPOSED/明示disposeで解除します。起動フラグOFF＋再読込で従来経路へ切り戻せます。依存を戻す場合はmanifest/lock/実解決を一組で復旧します。npm公開や後続段階の動的候補は含みません。
+Registration is limited to the optional API (`apiVersion: 1`) and is released on `RUNTIME_DISPOSED` or an explicit dispose. Turning the startup flag off and reloading restores the previous behavior. When rolling back the dependency, restore the manifest, lockfile, and actual resolution together. This stage does not include an npm release or dynamic candidates from later stages.
 
-Schemaが記述する契約の根拠は実getInfoの宣言と既存の純粋なruntime変換です。SchemaBundleのretrievalUriはこのローカル文書の識別子であり、URL配信済み・HTTP取得によるref解決を意味しません。Schemaは同梱文書だけでcompileします。
-既存MAXの非空finiteなNumber alias（例`001`・`+1`・`0x10`）はNumberによる表示投影だけを行い、無変更rawを保存し直しません。空白・非finite・投影不能値はreadonlyとし、0/defaultを補いません。新しい入力にはこれらaliasを許可せずNP-finite-new-input-v1を適用します。
+The contract the Schema describes is grounded in the actual `getInfo` declarations and the existing pure runtime conversions. The SchemaBundle `retrievalUri` identifies this local document; it does not mean the Schema is served from that URL or that `$ref` is resolved over HTTP. The Schema compiles from the bundled documents only.
+Existing non-empty finite Number aliases for `MAX` (for example `001`, `+1`, or `0x10`) are only projected through `Number` for display; unchanged raw values are not saved again. Blank, non-finite, or unprojectable values are read-only, and no `0` or default is substituted. New input does not accept these aliases and follows NP-finite-new-input-v1.
 
 Registration uses the optional editor API available when the extension instance is constructed. Adding or replacing that API later is not followed automatically; reload the GUI and reconstruct the extension instance after changing the startup configuration.
