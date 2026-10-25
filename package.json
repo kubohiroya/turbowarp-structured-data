@@ -75,7 +75,7 @@
     "vite": "^8.2.2",
     "vitest": "^5.0.0",
     "react-dom": "18.3.1",
-    "@kubohiroya/turbowarp-extension-data-editor": "^0.2.1",
+    "@kubohiroya/turbowarp-extension-data-editor": "^0.3.3",
     "@kubohiroya/turbowarp-named-functions": "^0.1.1"
   },
   "dependencies": {
