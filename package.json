@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": "Hiroya Kubo <hiroya@cuc.ac.jp>",
   "license": "MPL-2.0",
@@ -83,9 +83,9 @@
   "peerDependencies": {
     "@kubohiroya/turbowarp-named-data": ">=0.4.0 <1"
   },
-  "gitHead": "7429d0707e0c46099fa89d09f456a43a29919395",
+  "gitHead": "e66395b1c2e69b27fafecae7c5afdc3c73e35232",
   "x-turbowarp-source": {
-    "revision": "7429d0707e0c46099fa89d09f456a43a29919395",
+    "revision": "e66395b1c2e69b27fafecae7c5afdc3c73e35232",
     "revisionRole": "base-commit",
     "sourceState": "local-release-overlay"
   },

@@ -39,7 +39,7 @@ immediately return to metadata without schema identities.
 ## Installation
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.6.2
+pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.7.0
 ```
 
 ## Quick start
