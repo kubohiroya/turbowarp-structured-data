@@ -12,8 +12,24 @@ import {
 import {
   extensionConfig,
   isNamedDataRegistryMvpEnabled,
-  isStructuredDataMvpEnabled
+  isStructuredDataMvpEnabled,
+  isStructuredSchemaEnabled
 } from './config.js';
+import {
+  addDraftProperty,
+  assertValueMatchesSchema,
+  beginSchemaDraft,
+  draftToSchemaDocument,
+  parseAdditionalProperties,
+  parseRequiredFlag,
+  parseSchemaDocument,
+  parseSchemaReference,
+  schemaEntry,
+  schemaKey,
+  type SchemaDraft,
+  type SchemaEntry,
+  type SchemaReference
+} from './schema.js';
 import {
   parseJsonDocument,
   parseYamlDocument,
@@ -74,6 +90,19 @@ interface ActiveIteration extends IterationEntry {
 const LOOP_STATE = 'structuredDataLoopState';
 const blockDefinitions = definitions.blocks as readonly BlockDefinition[];
 
+/** Blocks that only appear while the startup-fixed schema flag is on. */
+const SCHEMA_OPCODES: ReadonlySet<string> = new Set([
+  'defineSchema',
+  'beginSchema',
+  'addSchemaProperty',
+  'commitSchema',
+  'hasSchema',
+  'deleteSchema',
+  'parseJsonWithSchema',
+  'parseYamlWithSchema',
+  'schemaOf'
+]);
+
 export class StructuredDataExtension implements TurboWarpExtension {
   private readonly enabled: boolean;
   private disposed = false;
@@ -81,6 +110,8 @@ export class StructuredDataExtension implements TurboWarpExtension {
   private readonly unregisterSourceEditors: () => void;
   private readonly unregisterFixedInputEditors: () => void;
   private registries = new WeakMap<object, Map<string, StructuredDataBinding>>();
+  private schemaRegistries = new WeakMap<object, Map<string, SchemaEntry>>();
+  private schemaDrafts = new WeakMap<object, SchemaDraft>();
   private iterationStacks = new WeakMap<object, ActiveIteration[]>();
   private nextRevision = 1;
   private readonly namedDataProvider?: StructuredDataNamedDataProvider;
@@ -91,7 +122,8 @@ export class StructuredDataExtension implements TurboWarpExtension {
   public constructor(
     private readonly scratch: ScratchApi,
     enabled = isStructuredDataMvpEnabled(),
-    namedDataEnabled = isNamedDataRegistryMvpEnabled()
+    namedDataEnabled = isNamedDataRegistryMvpEnabled(),
+    private readonly schemaEnabled = isStructuredSchemaEnabled()
   ) {
     this.enabled = enabled;
     this.unregisterSourceEditors = registerSourceEditors(this.scratch, enabled ? sourceEditorDefinitions : []);
@@ -159,7 +191,11 @@ export class StructuredDataExtension implements TurboWarpExtension {
       name: this.scratch.translate(definitions.extensionName),
       docsURI: extensionConfig.docsURI,
       blockIconURI: extensionConfig.blockIconURI,
-      blocks: this.enabled ? blockDefinitions.map((block) => this.toScratchBlock(block)) : []
+      blocks: this.enabled
+        ? blockDefinitions
+            .filter((block) => this.schemaEnabled || !SCHEMA_OPCODES.has(block.opcode))
+            .map((block) => this.toScratchBlock(block))
+        : []
     };
   }
 
@@ -219,6 +255,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
       this.path(args.PATH),
       parseJsonValue(this.scratch.Cast.toString(args.VALUE))
     );
+    this.assertCandidate(util.target, name, updated);
     this.setBinding(util.target, name, updated);
   }
 
@@ -228,6 +265,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
       this.requireDataByName(util.target, name),
       this.path(args.PATH)
     );
+    this.assertCandidate(util.target, name, updated);
     this.setBinding(util.target, name, updated);
   }
 
@@ -289,6 +327,165 @@ export class StructuredDataExtension implements TurboWarpExtension {
     return stringifyJson(this.currentIteration(util.thread).value);
   }
 
+  public defineSchema(
+    args: {SCHEMA_ID: unknown; VERSION: unknown; TEXT: unknown},
+    util: ScratchBlockUtility
+  ): void {
+    this.requireSchemaSupport();
+    const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+    const document = parseSchemaDocument(this.scratch.Cast.toString(args.TEXT), reference);
+    this.schemaRegistryFor(util.target).set(schemaKey(reference), schemaEntry(reference, document));
+  }
+
+  public beginSchema(
+    args: {SCHEMA_ID: unknown; VERSION: unknown; EXTRA: unknown},
+    util: ScratchBlockUtility
+  ): void {
+    this.requireSchemaSupport();
+    const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+    const additionalProperties = parseAdditionalProperties(
+      this.scratch.Cast.toString(args.EXTRA),
+      reference
+    );
+    this.schemaDrafts.set(util.target, beginSchemaDraft(reference, additionalProperties));
+  }
+
+  public addSchemaProperty(
+    args: {PROPERTY: unknown; TYPE: unknown; REQUIRED: unknown},
+    util: ScratchBlockUtility
+  ): void {
+    this.requireSchemaSupport();
+    const draft = this.requireDraft(util.target);
+    addDraftProperty(
+      draft,
+      this.scratch.Cast.toString(args.PROPERTY),
+      this.scratch.Cast.toString(args.TYPE),
+      parseRequiredFlag(this.scratch.Cast.toString(args.REQUIRED), draft.reference)
+    );
+  }
+
+  public commitSchema(_args: Record<string, never>, util: ScratchBlockUtility): void {
+    this.requireSchemaSupport();
+    const draft = this.requireDraft(util.target);
+    const entry = schemaEntry(draft.reference, draftToSchemaDocument(draft));
+    this.schemaRegistryFor(util.target).set(schemaKey(draft.reference), entry);
+    this.schemaDrafts.delete(util.target);
+  }
+
+  public hasSchema(
+    args: {SCHEMA_ID: unknown; VERSION: unknown},
+    util: ScratchBlockUtility
+  ): boolean {
+    this.requireSchemaSupport();
+    return this.schemaRegistryFor(util.target).has(
+      schemaKey(parseSchemaReference(args.SCHEMA_ID, args.VERSION))
+    );
+  }
+
+  public deleteSchema(
+    args: {SCHEMA_ID: unknown; VERSION: unknown},
+    util: ScratchBlockUtility
+  ): void {
+    this.requireSchemaSupport();
+    const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+    if (!this.schemaRegistryFor(util.target).delete(schemaKey(reference))) {
+      this.schemaNotFound(reference);
+    }
+  }
+
+  public parseJsonWithSchema(
+    args: {TEXT: unknown; NAME: unknown; SCHEMA_ID: unknown; VERSION: unknown},
+    util: ScratchBlockUtility
+  ): void {
+    this.storeWithSchema(args, util, parseJsonDocument, 'json');
+  }
+
+  public parseYamlWithSchema(
+    args: {TEXT: unknown; NAME: unknown; SCHEMA_ID: unknown; VERSION: unknown},
+    util: ScratchBlockUtility
+  ): void {
+    this.storeWithSchema(args, util, parseYamlDocument, 'yaml');
+  }
+
+  public schemaOf(args: {NAME: unknown}, util: ScratchBlockUtility): string {
+    this.requireSchemaSupport();
+    const name = this.name(args.NAME);
+    const binding = this.registryFor(util.target).get(name);
+    if (binding === undefined) this.dataNotFound(name);
+    const reference = binding.schemaRef;
+    return stringifyJson(
+      reference === undefined ? {} : {id: reference.id, version: reference.version}
+    );
+  }
+
+  /** Parses a document and binds it only when the whole value matches the referenced Schema. */
+  private storeWithSchema(
+    args: {TEXT: unknown; NAME: unknown; SCHEMA_ID: unknown; VERSION: unknown},
+    util: ScratchBlockUtility,
+    decode: (source: string) => JsonValue,
+    nativeRepresentation: 'json' | 'yaml'
+  ): void {
+    this.requireSchemaSupport();
+    const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+    const entry = this.requireSchema(util.target, reference);
+    const name = this.name(args.NAME);
+    const candidate = decode(this.scratch.Cast.toString(args.TEXT));
+    assertValueMatchesSchema(candidate, entry, name);
+    this.setBinding(util.target, name, candidate, nativeRepresentation, entry.reference);
+  }
+
+  /**
+   * Checks a candidate for a schema-bound binding before it replaces the stored value. Every path
+   * writer builds its candidate immutably, so a rejection leaves the previous binding untouched.
+   */
+  private assertCandidate(target: object, name: string, candidate: JsonValue): void {
+    const reference = this.registryFor(target).get(name)?.schemaRef;
+    if (reference === undefined) return;
+    assertValueMatchesSchema(candidate, this.requireSchema(target, reference), name);
+  }
+
+  private requireSchema(target: object, reference: SchemaReference): SchemaEntry {
+    const entry = this.schemaRegistryFor(target).get(schemaKey(reference));
+    if (entry === undefined) this.schemaNotFound(reference);
+    return entry;
+  }
+
+  private requireDraft(target: object): SchemaDraft {
+    const draft = this.schemaDrafts.get(target);
+    if (!draft) {
+      throw new StructuredDataError(
+        'INVALID_SCHEMA',
+        'No schema definition is open; use the begin schema block first.'
+      );
+    }
+    return draft;
+  }
+
+  private schemaRegistryFor(target: object): Map<string, SchemaEntry> {
+    let registry = this.schemaRegistries.get(target);
+    if (!registry) {
+      registry = new Map();
+      this.schemaRegistries.set(target, registry);
+    }
+    return registry;
+  }
+
+  private requireSchemaSupport(): void {
+    if (this.schemaEnabled) return;
+    throw new StructuredDataError(
+      'INVALID_SCHEMA',
+      'Schema support is off; set STRUCTURED_SCHEMA before the extension loads.'
+    );
+  }
+
+  private schemaNotFound(reference: SchemaReference): never {
+    throw new StructuredDataError(
+      'SCHEMA_NOT_FOUND',
+      `Schema does not exist: ${schemaKey(reference)}`,
+      {schemaId: reference.id, schemaVersion: reference.version}
+    );
+  }
+
   private store(
     target: object,
     rawName: unknown,
@@ -321,15 +518,22 @@ export class StructuredDataExtension implements TurboWarpExtension {
     target: object,
     name: string,
     value: JsonValue,
-    nativeRepresentation?: 'json' | 'yaml'
+    nativeRepresentation?: 'json' | 'yaml',
+    schemaRef?: SchemaReference
   ): void {
     const registry = this.registryFor(target);
+    const previous = registry.get(name);
     const retainedRepresentation =
-      nativeRepresentation ?? registry.get(name)?.nativeRepresentation ?? 'json';
+      nativeRepresentation ?? previous?.nativeRepresentation ?? 'json';
+    // A plain parse rebinds the name from scratch and drops any schema the old value carried;
+    // a path update keeps the binding's schema so later candidates stay checked.
+    const retainedSchemaRef =
+      schemaRef ?? (nativeRepresentation === undefined ? previous?.schemaRef : undefined);
     registry.set(name, {
       value,
       revision: this.nextRevision,
-      nativeRepresentation: retainedRepresentation
+      nativeRepresentation: retainedRepresentation,
+      ...(retainedSchemaRef === undefined ? {} : {schemaRef: retainedSchemaRef})
     });
     this.nextRevision += 1;
   }
@@ -373,6 +577,8 @@ export class StructuredDataExtension implements TurboWarpExtension {
   private clearRuntimeState(): void {
     this.namedDataProvider?.clearSession();
     this.registries = new WeakMap();
+    this.schemaRegistries = new WeakMap();
+    this.schemaDrafts = new WeakMap();
     this.iterationStacks = new WeakMap();
     this.nextRevision = 1;
   }

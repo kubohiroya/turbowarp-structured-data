@@ -23,8 +23,8 @@ const manifest = JSON.parse(await readFile(new URL('extension-manifest.json', di
 if (manifest.formatVersion !== 2 || manifest.id !== 'kubohiroyastructureddata') {
   throw new Error('dist/extension-manifest.json has unexpected identity or format version.');
 }
-if (manifest.blocks.length !== 16 || new Set(manifest.blocks.map((block) => block.opcode)).size !== 16) {
-  throw new Error('dist/extension-manifest.json must contain all 16 unique integrated opcodes.');
+if (manifest.blocks.length !== 25 || new Set(manifest.blocks.map((block) => block.opcode)).size !== 25) {
+  throw new Error('dist/extension-manifest.json must contain all 25 unique integrated opcodes.');
 }
 
 const bundle = await readFile(new URL('structured-data.js', distUrl), 'utf8');

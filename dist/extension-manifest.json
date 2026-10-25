@@ -22,6 +22,77 @@
   },
   "blocks": [
     {
+      "opcode": "addSchemaProperty",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "PROPERTY",
+          "type": "STRING"
+        },
+        {
+          "id": "REQUIRED",
+          "type": "STRING"
+        },
+        {
+          "id": "TYPE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.addSchemaProperty"
+      }
+    },
+    {
+      "opcode": "beginSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "EXTRA",
+          "type": "STRING"
+        },
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.beginSchema"
+      }
+    },
+    {
+      "opcode": "commitSchema",
+      "blockType": "COMMAND",
+      "arguments": [],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.commitSchema"
+      }
+    },
+    {
       "opcode": "currentIndex",
       "blockType": "REPORTER",
       "arguments": [],
@@ -67,6 +138,34 @@
       }
     },
     {
+      "opcode": "defineSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.defineSchema"
+      }
+    },
+    {
       "opcode": "deleteAtPath",
       "blockType": "COMMAND",
       "arguments": [
@@ -89,11 +188,37 @@
         "INVALID_PATH",
         "PATH_NOT_FOUND",
         "TYPE_MISMATCH",
-        "INDEX_OUT_OF_RANGE"
+        "INDEX_OUT_OF_RANGE",
+        "SCHEMA_VALIDATION_FAILED"
       ],
       "server": {
         "supported": true,
         "irOperation": "structuredData.delete"
+      }
+    },
+    {
+      "opcode": "deleteSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA",
+        "SCHEMA_NOT_FOUND"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.deleteSchema"
       }
     },
     {
@@ -214,6 +339,30 @@
       }
     },
     {
+      "opcode": "hasSchema",
+      "blockType": "BOOLEAN",
+      "arguments": [
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "boolean",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.hasSchema"
+      }
+    },
+    {
       "opcode": "hasStructuredData",
       "blockType": "BOOLEAN",
       "arguments": [
@@ -320,6 +469,43 @@
       }
     },
     {
+      "opcode": "parseJsonWithSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_JSON",
+        "INVALID_NAME",
+        "PARSE_LIMIT_EXCEEDED",
+        "INVALID_SCHEMA",
+        "SCHEMA_NOT_FOUND",
+        "SCHEMA_VALIDATION_FAILED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.parseJsonWithSchema"
+      }
+    },
+    {
       "opcode": "parseYaml",
       "blockType": "COMMAND",
       "arguments": [
@@ -343,6 +529,64 @@
       "server": {
         "supported": true,
         "irOperation": "structuredData.parseYaml"
+      }
+    },
+    {
+      "opcode": "parseYamlWithSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_YAML",
+        "INVALID_NAME",
+        "PARSE_LIMIT_EXCEEDED",
+        "INVALID_SCHEMA",
+        "SCHEMA_NOT_FOUND",
+        "SCHEMA_VALIDATION_FAILED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.parseYamlWithSchema"
+      }
+    },
+    {
+      "opcode": "schemaOf",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "jsonText",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.schemaOf"
       }
     },
     {
@@ -373,7 +617,8 @@
         "INVALID_PATH",
         "PATH_NOT_FOUND",
         "TYPE_MISMATCH",
-        "INDEX_OUT_OF_RANGE"
+        "INDEX_OUT_OF_RANGE",
+        "SCHEMA_VALIDATION_FAILED"
       ],
       "server": {
         "supported": true,

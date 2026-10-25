@@ -1,6 +1,7 @@
 export declare const STRUCTURED_DATA_MVP_DEFAULT = false;
 export declare const NAMED_DATA_REGISTRY_MVP_DEFAULT = false;
 export declare const NAMED_DATA_SCHEMA_REF_DEFAULT = false;
+export declare const STRUCTURED_SCHEMA_DEFAULT = false;
 export declare function isNamedDataSchemaRefEnabled(source?: {
     __TW_NAMED_DATA_FEATURE_FLAGS__?: {
         NAMED_DATA_SCHEMA_REF?: unknown;
@@ -11,6 +12,9 @@ export declare function isStructuredDataMvpEnabled(source?: {
 }): boolean;
 export declare function isNamedDataRegistryMvpEnabled(source?: {
     NAMED_DATA_REGISTRY_MVP?: unknown;
+}): boolean;
+export declare function isStructuredSchemaEnabled(source?: {
+    STRUCTURED_SCHEMA?: unknown;
 }): boolean;
 export declare const extensionConfig: {
     readonly id: "kubohiroyastructureddata";

@@ -1,4 +1,4 @@
-export declare const STRUCTURED_DATA_ERROR_CODES: readonly ["INVALID_JSON", "INVALID_YAML", "INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "ITERATION_LIMIT_EXCEEDED", "ITERATION_CONTEXT_REQUIRED", "PARSE_LIMIT_EXCEEDED"];
+export declare const STRUCTURED_DATA_ERROR_CODES: readonly ["INVALID_JSON", "INVALID_YAML", "INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "ITERATION_LIMIT_EXCEEDED", "ITERATION_CONTEXT_REQUIRED", "PARSE_LIMIT_EXCEEDED", "INVALID_SCHEMA", "SCHEMA_NOT_FOUND", "SCHEMA_VALIDATION_FAILED"];
 export type StructuredDataErrorCode = (typeof STRUCTURED_DATA_ERROR_CODES)[number];
 export type JsonPrimitive = null | boolean | number | string;
 export type JsonValue = JsonPrimitive | JsonValue[] | {
@@ -11,9 +11,22 @@ export type PathSegment = {
     kind: 'index';
     value: number;
 };
+/** Machine-readable context carried beside the stable code, so callers never parse the message. */
+export interface StructuredDataErrorDetails {
+    /** Name of the structured data binding the failure belongs to. */
+    dataName?: string;
+    /** Stable identity of the schema that rejected the value. */
+    schemaId?: string;
+    schemaVersion?: string;
+    /** JSON path of the failing value, in the `$.a[0].b` syntax the path blocks accept. */
+    path?: string;
+    /** What the schema expected at that path, for example `number` or `required`. */
+    expected?: string;
+}
 export declare class StructuredDataError extends Error {
     readonly code: StructuredDataErrorCode;
-    constructor(code: StructuredDataErrorCode, message: string);
+    readonly details: StructuredDataErrorDetails;
+    constructor(code: StructuredDataErrorCode, message: string, details?: StructuredDataErrorDetails);
 }
 export declare function parseJson(text: unknown): JsonValue;
 export declare function isValidJson(text: unknown): boolean;

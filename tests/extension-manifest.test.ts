@@ -15,7 +15,7 @@ describe('extension API manifest', () => {
     const manifest = createExtensionManifest(extensionConfig.id, source, options);
 
     expect(manifest.formatVersion).toBe(2);
-    expect(manifest.blocks).toHaveLength(16);
+    expect(manifest.blocks).toHaveLength(25);
     for (const block of manifest.blocks) {
       expect(block.resultType).toBeDefined();
       expect(block.effect).toBeDefined();

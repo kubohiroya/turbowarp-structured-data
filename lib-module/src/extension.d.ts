@@ -7,19 +7,22 @@ interface NamedPathArguments {
 }
 export declare class StructuredDataExtension implements TurboWarpExtension {
     private readonly scratch;
+    private readonly schemaEnabled;
     private readonly enabled;
     private disposed;
     private readonly releaseRuntimeListeners;
     private readonly unregisterSourceEditors;
     private readonly unregisterFixedInputEditors;
     private registries;
+    private schemaRegistries;
+    private schemaDrafts;
     private iterationStacks;
     private nextRevision;
     private readonly namedDataProvider?;
     private readonly namedDataRegistry?;
     private readonly namedDataRegistration?;
     private readonly unbindNamedDataRegistryLifecycle?;
-    constructor(scratch: ScratchApi, enabled?: boolean, namedDataEnabled?: boolean);
+    constructor(scratch: ScratchApi, enabled?: boolean, namedDataEnabled?: boolean, schemaEnabled?: boolean);
     getNamedDataProvider(): StructuredDataNamedDataProvider | undefined;
     getNamedDataRegistry(): NamedDataRegistryService | undefined;
     dispose(): Promise<void>;
@@ -58,6 +61,57 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     currentKey(_args: Record<string, never>, util: ScratchBlockUtility): string;
     currentIndex(_args: Record<string, never>, util: ScratchBlockUtility): number;
     currentValueJson(_args: Record<string, never>, util: ScratchBlockUtility): string;
+    defineSchema(args: {
+        SCHEMA_ID: unknown;
+        VERSION: unknown;
+        TEXT: unknown;
+    }, util: ScratchBlockUtility): void;
+    beginSchema(args: {
+        SCHEMA_ID: unknown;
+        VERSION: unknown;
+        EXTRA: unknown;
+    }, util: ScratchBlockUtility): void;
+    addSchemaProperty(args: {
+        PROPERTY: unknown;
+        TYPE: unknown;
+        REQUIRED: unknown;
+    }, util: ScratchBlockUtility): void;
+    commitSchema(_args: Record<string, never>, util: ScratchBlockUtility): void;
+    hasSchema(args: {
+        SCHEMA_ID: unknown;
+        VERSION: unknown;
+    }, util: ScratchBlockUtility): boolean;
+    deleteSchema(args: {
+        SCHEMA_ID: unknown;
+        VERSION: unknown;
+    }, util: ScratchBlockUtility): void;
+    parseJsonWithSchema(args: {
+        TEXT: unknown;
+        NAME: unknown;
+        SCHEMA_ID: unknown;
+        VERSION: unknown;
+    }, util: ScratchBlockUtility): void;
+    parseYamlWithSchema(args: {
+        TEXT: unknown;
+        NAME: unknown;
+        SCHEMA_ID: unknown;
+        VERSION: unknown;
+    }, util: ScratchBlockUtility): void;
+    schemaOf(args: {
+        NAME: unknown;
+    }, util: ScratchBlockUtility): string;
+    /** Parses a document and binds it only when the whole value matches the referenced Schema. */
+    private storeWithSchema;
+    /**
+     * Checks a candidate for a schema-bound binding before it replaces the stored value. Every path
+     * writer builds its candidate immutably, so a rejection leaves the previous binding untouched.
+     */
+    private assertCandidate;
+    private requireSchema;
+    private requireDraft;
+    private schemaRegistryFor;
+    private requireSchemaSupport;
+    private schemaNotFound;
     private store;
     private requireData;
     private requireDataByName;

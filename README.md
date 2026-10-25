@@ -36,6 +36,31 @@ Schema implementation. The agreed subset is `type`, `properties`, `required`,
 length bounds; unsupported keywords do not add validation behavior. Turn the flag off to
 immediately return to metadata without schema identities.
 
+## Schema-bound values
+
+`STRUCTURED_SCHEMA` is a separate startup-fixed flag, also defaulting to `false`. Set
+`globalThis.STRUCTURED_SCHEMA = true` before loading the extension to add nine schema blocks; with
+the flag off the extension publishes the same sixteen blocks and the same semantics as before, and
+a schema block that a saved project still calls fails with `INVALID_SCHEMA` rather than being
+ignored. Existing bindings never require a `schemaRef`, so turning the flag off and reloading is
+the immediate rollback.
+
+Schemas are interpreted by `validateAgainstSchema` from
+`@kubohiroya/turbowarp-named-functions/composition`, the same validator that checks named function
+arguments and returns, so one subset holds across repositories. Register a reusable schema with
+`define schema [ID] version [V] from JSON [TEXT]`, or stack `begin schema`, `add property` and
+`commit schema` to build the same canonical document from blocks. Bind a value with
+`parse JSON|YAML ... with schema [ID] version [V]`; a non-conforming document is never registered.
+Afterwards `set` and `delete` validate the whole candidate before replacing the binding, so a
+rejected update leaves the stored value untouched. Schemas are target-local like named data,
+several names may share one schema, and both are discarded when the project stops.
+
+Schema failures add the stable codes `INVALID_SCHEMA`, `SCHEMA_NOT_FOUND` and
+`SCHEMA_VALIDATION_FAILED`. `StructuredDataError` now also carries `details` with the data name,
+schema id and version, failing path and expectation, so callers never parse the message. See
+[Schema-bound values](docs/schema-bound-values.ja.md) and
+[the parity fixture](tests/fixtures/schema-parity.json).
+
 ## Installation
 
 ```bash
@@ -66,7 +91,8 @@ Supported paths are `$`, `$.users[0].profile.name`, and `$["key.with.dots"]`. Do
 
 Arrays iterate by ascending index and objects by Unicode code-point-sorted key. `max N` must be an integer from 1 to 1000 and defaults to 100. A collection larger than `N` fails rather than truncating. Server compilation requires `N` to be a static numeric literal.
 
-Stable error codes are `INVALID_JSON`, `INVALID_YAML`, `INVALID_NAME`, `DATA_NOT_FOUND`, `PARSE_LIMIT_EXCEEDED`, `INVALID_PATH`, `PATH_NOT_FOUND`, `TYPE_MISMATCH`, `INDEX_OUT_OF_RANGE`, `ITERATION_LIMIT_EXCEEDED`, and `ITERATION_CONTEXT_REQUIRED`.
+Stable error codes are `INVALID_JSON`, `INVALID_YAML`, `INVALID_NAME`, `DATA_NOT_FOUND`, `PARSE_LIMIT_EXCEEDED`, `INVALID_PATH`, `PATH_NOT_FOUND`, `TYPE_MISMATCH`, `INDEX_OUT_OF_RANGE`, `ITERATION_LIMIT_EXCEEDED`, and `ITERATION_CONTEXT_REQUIRED`. Enabling `STRUCTURED_SCHEMA` adds
+`INVALID_SCHEMA`, `SCHEMA_NOT_FOUND`, and `SCHEMA_VALIDATION_FAILED`.
 
 ## Block reference
 
@@ -239,6 +265,109 @@ Return the current iteration value as JSON.
 |---|---|
 | Type | Reporter |
 | Opcode | `currentValueJson` |
+
+### `define schema [SCHEMA_ID] version [VERSION] from JSON [TEXT]`
+
+Register a reusable Schema document from JSON text under a stable id and version.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `defineSchema` |
+| `SCHEMA_ID` | String, default: `sensor.reading` |
+| `VERSION` | String, default: `1.0.0` |
+| `TEXT` | String, default: `{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}` |
+
+### `begin schema [SCHEMA_ID] version [VERSION] extra properties [EXTRA]`
+
+Start a visual Schema definition for an object, replacing any open draft.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `beginSchema` |
+| `SCHEMA_ID` | String, default: `sensor.reading` |
+| `VERSION` | String, default: `1.0.0` |
+| `EXTRA` | String, default: `reject` |
+
+### `add property [PROPERTY] type [TYPE] [REQUIRED]`
+
+Add one property of the subset types to the open visual Schema draft.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `addSchemaProperty` |
+| `PROPERTY` | String, default: `name` |
+| `TYPE` | String, default: `string` |
+| `REQUIRED` | String, default: `required` |
+
+### `commit schema`
+
+Register the open visual draft as the same canonical Schema a text definition produces.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `commitSchema` |
+
+### `schema [SCHEMA_ID] version [VERSION] exists?`
+
+Report whether the current target has that Schema registered.
+
+| Property | Value |
+|---|---|
+| Type | Boolean |
+| Opcode | `hasSchema` |
+| `SCHEMA_ID` | String, default: `sensor.reading` |
+| `VERSION` | String, default: `1.0.0` |
+
+### `delete schema [SCHEMA_ID] version [VERSION]`
+
+Delete a registered Schema; bindings already validated against it keep their values.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `deleteSchema` |
+| `SCHEMA_ID` | String, default: `sensor.reading` |
+| `VERSION` | String, default: `1.0.0` |
+
+### `parse JSON [TEXT] as [NAME] with schema [SCHEMA_ID] version [VERSION]`
+
+Parse JSON text and bind it only when it matches the named Schema.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `parseJsonWithSchema` |
+| `TEXT` | String, default: `{"name":"TurboWarp"}` |
+| `NAME` | String, default: `data` |
+| `SCHEMA_ID` | String, default: `sensor.reading` |
+| `VERSION` | String, default: `1.0.0` |
+
+### `parse YAML [TEXT] as [NAME] with schema [SCHEMA_ID] version [VERSION]`
+
+Parse safe YAML text and bind it only when it matches the named Schema.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `parseYamlWithSchema` |
+| `TEXT` | String, default: `name: TurboWarp` |
+| `NAME` | String, default: `data` |
+| `SCHEMA_ID` | String, default: `sensor.reading` |
+| `VERSION` | String, default: `1.0.0` |
+
+### `schema of [NAME]`
+
+Return the schemaRef bound to named data as JSON, or an empty object when it has none.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `schemaOf` |
+| `NAME` | String, default: `data` |
 
 <!-- END GENERATED BLOCKS -->
 

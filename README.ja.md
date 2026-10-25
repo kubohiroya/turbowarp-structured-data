@@ -27,6 +27,26 @@ JSON/YAML入力は256 KiB、深さ64、50,000 valueまでです。YAML alias、w
 
 structured-data providerはnamed-data 0.4.0を介してbindingの任意の`schemaRef`を伝播できます。IDは`^[a-z][a-z0-9.-]{0,127}$`に一致し、versionは完全なSemVerである必要があります。Schema identityの解決は起動時固定で、明示的に有効化するまで既定OFFです。provider読み込み前に`globalThis.__TW_NAMED_DATA_FEATURE_FLAGS__ = {NAMED_DATA_SCHEMA_REF: true}`を設定します。参照はbindingの安定IDと完全なSemVer versionに一致する必要があります。providerはSchema本体を保持せず、別versionへのfallbackもしません。consumerは自身のSchema catalogでidentityを解決し、既存のJSON Schema実装で値を検証します。合意するsubsetは`type`、`properties`、`required`、Boolean形式の`additionalProperties`、`items`、`enum`、`const`、数値範囲、文字列／配列の長さ制約です。未対応keywordは検証動作を追加しません。flagをOFFにすればschema identityなしのmetadataへ即時に戻せます。
 
+## Schemaを結び付けたvalue
+
+`STRUCTURED_SCHEMA`は独立した起動時固定flagで、既定`false`です。拡張の読み込み前に
+`globalThis.STRUCTURED_SCHEMA = true`を設定するとSchema関連の9 blockが追加されます。OFFのままなら
+公開blockは従来の16個で意味論も変わらず、保存済みprojectがSchema blockを呼んだ場合は暗黙に無視せず
+`INVALID_SCHEMA`で失敗します。既存bindingはschemaRefを要求しないため、flagをOFFにして再読込すれば即時rollbackできます。
+
+Schemaは`@kubohiroya/turbowarp-named-functions/composition`の`validateAgainstSchema`で解釈します。
+名前付き関数の引数・戻り値を検証するものと同一実装なので、subsetがrepository間で1つに保たれます。
+`define schema [ID] version [V] from JSON [TEXT]`でテキストから登録するか、`begin schema`、`add property`、
+`commit schema`を積んで同じcanonical文書をblockから組み立てます。`parse JSON|YAML ... with schema [ID] version [V]`
+で結合し、不適合な文書はbindingへ登録しません。以降の`set`と`delete`は更新候補全体を検証してから置換するため、
+拒否された更新では保存済みの値がそのまま残ります。Schemaはnamed valueと同じtarget-localで、
+複数の名前が1つのSchemaを共有でき、どちらもproject停止時に破棄されます。
+
+Schema関連の安定codeは`INVALID_SCHEMA`、`SCHEMA_NOT_FOUND`、`SCHEMA_VALIDATION_FAILED`です。
+`StructuredDataError`はデータ名、Schema ID／version、失敗path、期待値を持つ`details`も公開するので、
+呼び出し側がmessageをparseする必要はありません。[Schemaを結び付けた名前付きvalue](docs/schema-bound-values.ja.md)と
+[parity fixture](tests/fixtures/schema-parity.json)を参照してください。
+
 ## クイックスタート
 
 ```text
@@ -51,7 +71,8 @@ to JSON [config]
 
 arrayはindex昇順、objectはUnicodeコードポイント順で反復します。`max N`は1〜1000の整数で既定100です。件数超過は打ち切らず失敗します。server compilerでは`N`を静的数値literalにする必要があります。
 
-安定error codeは`INVALID_JSON`、`INVALID_YAML`、`INVALID_NAME`、`DATA_NOT_FOUND`、`PARSE_LIMIT_EXCEEDED`、`INVALID_PATH`、`PATH_NOT_FOUND`、`TYPE_MISMATCH`、`INDEX_OUT_OF_RANGE`、`ITERATION_LIMIT_EXCEEDED`、`ITERATION_CONTEXT_REQUIRED`です。
+安定error codeは`INVALID_JSON`、`INVALID_YAML`、`INVALID_NAME`、`DATA_NOT_FOUND`、`PARSE_LIMIT_EXCEEDED`、`INVALID_PATH`、`PATH_NOT_FOUND`、`TYPE_MISMATCH`、`INDEX_OUT_OF_RANGE`、`ITERATION_LIMIT_EXCEEDED`、`ITERATION_CONTEXT_REQUIRED`です。`STRUCTURED_SCHEMA`を有効にすると
+`INVALID_SCHEMA`、`SCHEMA_NOT_FOUND`、`SCHEMA_VALIDATION_FAILED`が加わります。
 
 ## ブロック
 
@@ -62,6 +83,7 @@ arrayはindex昇順、objectはUnicodeコードポイント順で反復します
 | namespace | `structured data ... exists?`、`delete structured data ...` |
 | path | get、has、set、delete、keys、length |
 | iteration | for each、current key/index/value |
+| schema（flag ON時） | define/begin/add property/commit、exists?、delete、parse ... with schema、schema of |
 
 ## compiler契約
 
