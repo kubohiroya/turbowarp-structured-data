@@ -157,8 +157,8 @@ describe('real Structured Data flag metadata and integer parity', () => {
     vi.stubGlobal('Scratch', {gui: {blockEditors: {apiVersion: 1, registerFixedInputEditor: register}},
       vm: {runtime: {on: vi.fn(), off: vi.fn()}}, BlockType: {COMMAND: 'command', REPORTER: 'reporter', BOOLEAN: 'boolean', LOOP: 'loop'},
       ArgumentType: {STRING: 'string', NUMBER: 'number'}, Cast: {toString: String, toNumber: Number}, translate: (value: string) => value});
-    const inactive = new StructuredDataExtension(false, false);expect(inactive.getInfo().blocks).toEqual([]);expect(register).not.toHaveBeenCalled();
-    const active = new StructuredDataExtension(true, false);const info = active.getInfo();expect(active.getInfo()).toEqual(info);expect(register).toHaveBeenCalledTimes(1);
+    const inactive = new StructuredDataExtension(Scratch, false, false);expect(inactive.getInfo().blocks).toEqual([]);expect(register).not.toHaveBeenCalled();
+    const active = new StructuredDataExtension(Scratch, true, false);const info = active.getInfo();expect(active.getInfo()).toEqual(info);expect(register).toHaveBeenCalledTimes(1);
     const loop = (info.blocks as {opcode: string; arguments: Record<string, unknown>}[]).find(block => block.opcode === 'forEachAtPath')!;
     expect(Object.keys(loop.arguments)).toEqual(['NAME', 'PATH', 'MAX']);expect(loop.arguments.MAX).toEqual({type: 'number', defaultValue: 100});
     await active.dispose();await inactive.dispose();
@@ -190,7 +190,7 @@ it.each([true, false])('rolls back earlier SOURCE and fixed resources on real co
   vi.stubGlobal('Scratch', {gui: {blockEditors: {apiVersion: 1, registerSourceEditor: () => sourceRemove, registerFixedInputEditor() {
     if (fixedFails) throw new Error('fixed registration failure');return fixedRemove;
   }}}, vm: {runtime}});
-  expect(() => new StructuredDataExtension(true, false)).toThrow(fixedFails ? 'fixed registration failure' : 'later constructor failure');
+  expect(() => new StructuredDataExtension(Scratch, true, false)).toThrow(fixedFails ? 'fixed registration failure' : 'later constructor failure');
   expect(sourceRemove).toHaveBeenCalledTimes(3);expect(fixedRemove).toHaveBeenCalledTimes(fixedFails ? 0 : 1);
   expect([...listeners.values()].every(set => set.size === 0)).toBe(true);
 });

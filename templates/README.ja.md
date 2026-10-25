@@ -144,6 +144,42 @@ renderer境界、`release()`／`releaseAll()`を説明します。
 
 extension IDまたはopcode変更時はschema-aware migrationを説明し、保存済み識別子が変わった場合にJavaScriptだけの差替えを案内しません。
 
+## 統合ビルド用module API
+
+このソースのbuildは、単体JSとは別に、統合用のESM入口`./bundle-module`と
+型宣言を`lib-module/`へ生成します。
+
+```ts
+import {bundleModuleMetadata, createExtension, type ScratchApi}
+  from '@kubohiroya/<package>/bundle-module';
+
+export function createMember(memberScratch: ScratchApi) {
+  return createExtension(memberScratch);
+}
+```
+
+import時はglobal Scratch / window / documentを参照せず、拡張の生成・登録を行いません。
+明示的なcreateExtension(memberScratch)ごとに新しいinstanceを返し、後から実行する
+ブロック・編集用補助処理・lifecycle callbackも同じhostを使います。factoryは
+Scratch.extensions.registerを呼びません。単体entryも同じfactoryを使い、登録は1回です。
+
+凍結されたbundleModuleMetadataはformatVersion: 1、元のid、unsandboxed条件を
+宣言します。統合hostが生成前に検査し、登録とdisposeを管理します。ID・opcode・
+保存データ形式を変更しません。
+
+既存のSTRUCTURED_DATA_MVP・NAMED_DATA_REGISTRY_MVP・Schema参照の起動フラグと既定値を維持します。生成時の任意の編集登録・named-data初期化には注入hostを使います。dispose()をawaitして、このinstanceの登録とlistenerを解除します。StructuredDataExtensionを直接newする内部コードでは、hostを先頭に渡し、その後に従来の任意の機能フラグ引数を渡します。
+
+yaml等のruntime依存とそのsubpathは外部importのまま保持します。既存の小さな編集用
+純粋ヘルパーだけを含め、production consumerには編集packageやGUIエンジンを要求しません。
+公開型は既存tsconfigと同じES2022の型ライブラリを使い、生成JSはES2020を対象とします。
+既存exportsを維持して./bundle-moduleを追加し、templateへのruntime依存は追加しません。
+
+pnpm run build:moduleで生成し、pnpm run check:moduleは実tarballをproduction依存だけの
+consumerへinstallしてhost分離・単体版との動作一致・公開型・編集エンジンの非混入を検査します。
+sb3-toolchain側の統合buildは[sb3-toolchain #65](https://github.com/kubohiroya/sb3-toolchain/issues/65)の後続です。
+切戻しはこのmodule入口を選択せず従来のclassic distを読み込みます。新しいruntimeフラグや
+保存データの移行は導入しません。
+
 ## 開発
 
 `engines`のNode.jsと、`packageManager`に宣言したpnpmを使用します。

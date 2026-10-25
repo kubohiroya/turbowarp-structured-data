@@ -15,7 +15,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('browser/server semantic parity fixture', () => {
   it('matches namespace, codec, typed path, and error semantics', () => {
     for (const testCase of fixture.cases) {
-      const extension = new StructuredDataExtension(true);
+      const extension = new StructuredDataExtension(Scratch, true);
       const util = {target: {}, thread: {}, stackFrame: {}, startBranch: vi.fn()};
       const invoke = () => {
         if (testCase.format === 'json') {
