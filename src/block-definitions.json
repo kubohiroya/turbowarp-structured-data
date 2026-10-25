@@ -52,13 +52,13 @@
     {
       "opcode": "setJsonAtPath", "blockType": "COMMAND", "text": "set [NAME] at path [PATH] to JSON [VALUE]", "description": "Immutably update a named value and replace its binding.",
       "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$.name", "normalizesTo": "pathSegments"}, "VALUE": {"type": "STRING", "defaultValue": "\"Scratch\""}},
-      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_JSON", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE"],
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_JSON", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "SCHEMA_VALIDATION_FAILED"],
       "server": {"supported": true, "irOperation": "structuredData.set"}
     },
     {
       "opcode": "deleteAtPath", "blockType": "COMMAND", "text": "delete path [PATH] from [NAME]", "description": "Immutably delete a path and replace its named binding.",
       "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}, "PATH": {"type": "STRING", "defaultValue": "$.name", "normalizesTo": "pathSegments"}},
-      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE"],
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "SCHEMA_VALIDATION_FAILED"],
       "server": {"supported": true, "irOperation": "structuredData.delete"}
     },
     {
@@ -93,6 +93,59 @@
       "opcode": "currentValueJson", "blockType": "REPORTER", "text": "current value JSON", "description": "Return the current iteration value as JSON.",
       "arguments": {}, "resultType": "jsonText", "effect": "control", "immutable": true, "errors": ["ITERATION_CONTEXT_REQUIRED"],
       "server": {"supported": true, "irOperation": "structuredData.currentValue"}
+    },
+    {
+      "opcode": "defineSchema", "blockType": "COMMAND", "text": "define schema [SCHEMA_ID] version [VERSION] from JSON [TEXT]", "description": "Register a reusable Schema document from JSON text under a stable id and version.",
+      "arguments": {"SCHEMA_ID": {"type": "STRING", "defaultValue": "sensor.reading"}, "VERSION": {"type": "STRING", "defaultValue": "1.0.0"}, "TEXT": {"type": "STRING", "defaultValue": "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_SCHEMA"],
+      "server": {"supported": true, "irOperation": "structuredData.defineSchema"}
+    },
+    {
+      "opcode": "beginSchema", "blockType": "COMMAND", "text": "begin schema [SCHEMA_ID] version [VERSION] extra properties [EXTRA]", "description": "Start a visual Schema definition for an object, replacing any open draft.",
+      "arguments": {"SCHEMA_ID": {"type": "STRING", "defaultValue": "sensor.reading"}, "VERSION": {"type": "STRING", "defaultValue": "1.0.0"}, "EXTRA": {"type": "STRING", "defaultValue": "reject"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_SCHEMA"],
+      "server": {"supported": true, "irOperation": "structuredData.beginSchema"}
+    },
+    {
+      "opcode": "addSchemaProperty", "blockType": "COMMAND", "text": "add property [PROPERTY] type [TYPE] [REQUIRED]", "description": "Add one property of the subset types to the open visual Schema draft.",
+      "arguments": {"PROPERTY": {"type": "STRING", "defaultValue": "name"}, "TYPE": {"type": "STRING", "defaultValue": "string"}, "REQUIRED": {"type": "STRING", "defaultValue": "required"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_SCHEMA"],
+      "server": {"supported": true, "irOperation": "structuredData.addSchemaProperty"}
+    },
+    {
+      "opcode": "commitSchema", "blockType": "COMMAND", "text": "commit schema", "description": "Register the open visual draft as the same canonical Schema a text definition produces.",
+      "arguments": {}, "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_SCHEMA"],
+      "server": {"supported": true, "irOperation": "structuredData.commitSchema"}
+    },
+    {
+      "opcode": "hasSchema", "blockType": "BOOLEAN", "text": "schema [SCHEMA_ID] version [VERSION] exists?", "description": "Report whether the current target has that Schema registered.",
+      "arguments": {"SCHEMA_ID": {"type": "STRING", "defaultValue": "sensor.reading"}, "VERSION": {"type": "STRING", "defaultValue": "1.0.0"}},
+      "resultType": "boolean", "effect": "pure", "immutable": true, "errors": ["INVALID_SCHEMA"],
+      "server": {"supported": true, "irOperation": "structuredData.hasSchema"}
+    },
+    {
+      "opcode": "deleteSchema", "blockType": "COMMAND", "text": "delete schema [SCHEMA_ID] version [VERSION]", "description": "Delete a registered Schema; bindings already validated against it keep their values.",
+      "arguments": {"SCHEMA_ID": {"type": "STRING", "defaultValue": "sensor.reading"}, "VERSION": {"type": "STRING", "defaultValue": "1.0.0"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_SCHEMA", "SCHEMA_NOT_FOUND"],
+      "server": {"supported": true, "irOperation": "structuredData.deleteSchema"}
+    },
+    {
+      "opcode": "parseJsonWithSchema", "blockType": "COMMAND", "text": "parse JSON [TEXT] as [NAME] with schema [SCHEMA_ID] version [VERSION]", "description": "Parse JSON text and bind it only when it matches the named Schema.",
+      "arguments": {"TEXT": {"type": "STRING", "defaultValue": "{\"name\":\"TurboWarp\"}"}, "NAME": {"type": "STRING", "defaultValue": "data"}, "SCHEMA_ID": {"type": "STRING", "defaultValue": "sensor.reading"}, "VERSION": {"type": "STRING", "defaultValue": "1.0.0"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_JSON", "INVALID_NAME", "PARSE_LIMIT_EXCEEDED", "INVALID_SCHEMA", "SCHEMA_NOT_FOUND", "SCHEMA_VALIDATION_FAILED"],
+      "server": {"supported": true, "irOperation": "structuredData.parseJsonWithSchema"}
+    },
+    {
+      "opcode": "parseYamlWithSchema", "blockType": "COMMAND", "text": "parse YAML [TEXT] as [NAME] with schema [SCHEMA_ID] version [VERSION]", "description": "Parse safe YAML text and bind it only when it matches the named Schema.",
+      "arguments": {"TEXT": {"type": "STRING", "defaultValue": "name: TurboWarp"}, "NAME": {"type": "STRING", "defaultValue": "data"}, "SCHEMA_ID": {"type": "STRING", "defaultValue": "sensor.reading"}, "VERSION": {"type": "STRING", "defaultValue": "1.0.0"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_YAML", "INVALID_NAME", "PARSE_LIMIT_EXCEEDED", "INVALID_SCHEMA", "SCHEMA_NOT_FOUND", "SCHEMA_VALIDATION_FAILED"],
+      "server": {"supported": true, "irOperation": "structuredData.parseYamlWithSchema"}
+    },
+    {
+      "opcode": "schemaOf", "blockType": "REPORTER", "text": "schema of [NAME]", "description": "Return the schemaRef bound to named data as JSON, or an empty object when it has none.",
+      "arguments": {"NAME": {"type": "STRING", "defaultValue": "data"}},
+      "resultType": "jsonText", "effect": "pure", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND"],
+      "server": {"supported": true, "irOperation": "structuredData.schemaOf"}
     }
   ]
 }

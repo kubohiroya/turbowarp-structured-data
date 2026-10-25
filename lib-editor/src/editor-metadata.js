@@ -192,10 +192,11 @@ function parseFixedNumberInput(input) {
 	}) : invalidNumber;
 }
 var StructuredDataError = class extends Error {
-	constructor(code, message) {
+	constructor(code, message, details = {}) {
 		super(`${code}: ${message}`);
 		this.name = "StructuredDataError";
 		this.code = code;
+		this.details = details;
 	}
 };
 function parseJson(text) {

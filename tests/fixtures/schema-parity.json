@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "sharedSubset": {
+    "owner": "@kubohiroya/turbowarp-named-functions",
+    "entry": "@kubohiroya/turbowarp-named-functions/composition",
+    "validator": "validateAgainstSchema",
+    "definitionChecker": "validateSchemaDefinition",
+    "note": "The same validator checks named function arguments and returns, so a value accepted here is accepted there.",
+    "keywords": [
+      "type", "properties", "required", "additionalProperties", "items", "enum", "const",
+      "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"
+    ]
+  },
+  "schemas": [
+    {
+      "id": "parity.primitive", "version": "1.0.0",
+      "document": {"type": "object", "properties": {
+        "text": {"type": "string", "minLength": 2, "maxLength": 4},
+        "count": {"type": "integer", "minimum": 0, "maximum": 10},
+        "ratio": {"type": "number"},
+        "flag": {"type": "boolean"},
+        "nothing": {"type": "null"},
+        "either": {"type": ["string", "null"]}
+      }}
+    },
+    {
+      "id": "parity.object", "version": "1.0.0",
+      "document": {"type": "object", "additionalProperties": false,
+        "properties": {"name": {"type": "string"}, "nested": {"type": "object",
+          "properties": {"deep": {"type": "integer"}}, "required": ["deep"]}},
+        "required": ["name"]}
+    },
+    {
+      "id": "parity.array", "version": "1.0.0",
+      "document": {"type": "object", "properties": {"samples": {"type": "array",
+        "items": {"type": "number"}, "minItems": 1, "maxItems": 3}}}
+    },
+    {
+      "id": "parity.choice", "version": "1.0.0",
+      "document": {"type": "object", "properties": {
+        "mode": {"enum": ["read", "write"]}, "kind": {"const": "sensor"}}}
+    }
+  ],
+  "cases": [
+    {"name": "primitives in range", "schema": "parity.primitive@1.0.0",
+      "value": {"text": "abc", "count": 3, "ratio": 1.5, "flag": true, "nothing": null, "either": null},
+      "accepted": true},
+    {"name": "integer rejects a fraction", "schema": "parity.primitive@1.0.0",
+      "value": {"count": 1.5}, "accepted": false, "path": "$.count", "expected": "integer"},
+    {"name": "number accepts an integer", "schema": "parity.primitive@1.0.0",
+      "value": {"ratio": 2}, "accepted": true},
+    {"name": "string below minLength", "schema": "parity.primitive@1.0.0",
+      "value": {"text": "a"}, "accepted": false, "path": "$.text", "expected": "at least 2 characters"},
+    {"name": "string above maxLength", "schema": "parity.primitive@1.0.0",
+      "value": {"text": "abcde"}, "accepted": false, "path": "$.text", "expected": "at most 4 characters"},
+    {"name": "integer below minimum", "schema": "parity.primitive@1.0.0",
+      "value": {"count": -1}, "accepted": false, "path": "$.count", "expected": ">= 0"},
+    {"name": "integer above maximum", "schema": "parity.primitive@1.0.0",
+      "value": {"count": 11}, "accepted": false, "path": "$.count", "expected": "<= 10"},
+    {"name": "type array accepts either member", "schema": "parity.primitive@1.0.0",
+      "value": {"either": "text"}, "accepted": true},
+    {"name": "type array rejects a third type", "schema": "parity.primitive@1.0.0",
+      "value": {"either": 1}, "accepted": false, "path": "$.either", "expected": "string or null"},
+    {"name": "required and nested properties", "schema": "parity.object@1.0.0",
+      "value": {"name": "sensor", "nested": {"deep": 1}}, "accepted": true},
+    {"name": "missing required property", "schema": "parity.object@1.0.0",
+      "value": {"nested": {"deep": 1}}, "accepted": false, "path": "$.name", "expected": "required"},
+    {"name": "missing nested required property", "schema": "parity.object@1.0.0",
+      "value": {"name": "sensor", "nested": {}}, "accepted": false,
+      "path": "$.nested.deep", "expected": "required"},
+    {"name": "additionalProperties false rejects an extra key", "schema": "parity.object@1.0.0",
+      "value": {"name": "sensor", "extra": 1}, "accepted": false,
+      "path": "$.extra", "expected": "not allowed"},
+    {"name": "array items in range", "schema": "parity.array@1.0.0",
+      "value": {"samples": [1, 2]}, "accepted": true},
+    {"name": "array item of the wrong type", "schema": "parity.array@1.0.0",
+      "value": {"samples": [1, "two"]}, "accepted": false,
+      "path": "$.samples[1]", "expected": "number"},
+    {"name": "array below minItems", "schema": "parity.array@1.0.0",
+      "value": {"samples": []}, "accepted": false,
+      "path": "$.samples", "expected": "at least 1 items"},
+    {"name": "array above maxItems", "schema": "parity.array@1.0.0",
+      "value": {"samples": [1, 2, 3, 4]}, "accepted": false,
+      "path": "$.samples", "expected": "at most 3 items"},
+    {"name": "enum and const members", "schema": "parity.choice@1.0.0",
+      "value": {"mode": "read", "kind": "sensor"}, "accepted": true},
+    {"name": "value outside the enum", "schema": "parity.choice@1.0.0",
+      "value": {"mode": "delete"}, "accepted": false,
+      "path": "$.mode", "expected": "one of \"read\", \"write\""},
+    {"name": "value other than the const", "schema": "parity.choice@1.0.0",
+      "value": {"kind": "actuator"}, "accepted": false,
+      "path": "$.kind", "expected": "\"sensor\""}
+  ]
+}

@@ -102,6 +102,81 @@ describe('structured named data provider contract', () => {
     ).rejects.toMatchObject({code: 'NAMED_DATA_SCHEMA_VERSION_MISMATCH'});
   });
 
+  it('publishes the schemaRef a schema-bound block set, and refuses an unknown schema', async () => {
+    // Publishing schema identity needs the named-data registry's own flag as well as this
+    // extension's, because the two features roll out independently.
+    vi.stubGlobal('__TW_NAMED_DATA_FEATURE_FLAGS__', {NAMED_DATA_SCHEMA_REF: true});
+    const extension = new StructuredDataExtension(Scratch, true, true, true);
+    const target = {};
+    const util = utility(target);
+    const schemaRef = {id: 'com.example.profile', version: '1.0.0'};
+    const document = {
+      type: 'object',
+      properties: {name: {type: 'string'}},
+      required: ['name'],
+      additionalProperties: false
+    };
+
+    extension.defineSchema(
+      {SCHEMA_ID: schemaRef.id, VERSION: schemaRef.version, TEXT: JSON.stringify(document)},
+      util
+    );
+    extension.parseJsonWithSchema(
+      {TEXT: '{"name":"Ada"}', NAME: 'data', SCHEMA_ID: schemaRef.id, VERSION: schemaRef.version},
+      util
+    );
+    extension.parseJson({TEXT: '{"name":"Ada"}', NAME: 'free'}, util);
+
+    const provider = extension.getNamedDataProvider();
+    if (!provider) throw new Error('Provider must be registered.');
+    const bound = provider.stat(reference({schemaRef}), 'json', {target});
+    expect(bound.schemaRef).toEqual(schemaRef);
+
+    // A consumer that resolves the body can check it against the same shared validator.
+    const opened = provider.openBody(reference({schemaRef}), 'json', {target});
+    expect(validateAgainstSchema(JSON.parse(text(opened.body)), document)).toEqual([]);
+    opened.release();
+
+    // Unbound data has no schema identity to publish, so a schema-bound request cannot match it.
+    expect(provider.stat(reference({name: 'free'}), 'json', {target}).schemaRef).toBeUndefined();
+    expect(() => provider.stat(reference({name: 'free', schemaRef}), 'json', {target})).toThrowError(
+      expect.objectContaining({code: 'NAMED_DATA_SCHEMA_VERSION_MISMATCH'})
+    );
+    expect(() =>
+      provider.stat(reference({schemaRef: {...schemaRef, version: '2.0.0'}}), 'json', {target})
+    ).toThrowError(expect.objectContaining({code: 'NAMED_DATA_SCHEMA_VERSION_MISMATCH'}));
+    await extension.dispose();
+  });
+
+  it('serves plain requests while the named-data schema flag is off', async () => {
+    const extension = new StructuredDataExtension(Scratch, true, true, true);
+    const target = {};
+    const util = utility(target);
+    const schemaRef = {id: 'com.example.profile', version: '1.0.0'};
+    extension.defineSchema(
+      {
+        SCHEMA_ID: schemaRef.id,
+        VERSION: schemaRef.version,
+        TEXT: '{"type":"object","properties":{"name":{"type":"string"}}}'
+      },
+      util
+    );
+    extension.parseJsonWithSchema(
+      {TEXT: '{"name":"Ada"}', NAME: 'data', SCHEMA_ID: schemaRef.id, VERSION: schemaRef.version},
+      util
+    );
+
+    const provider = extension.getNamedDataProvider();
+    if (!provider) throw new Error('Provider must be registered.');
+    const plain = provider.stat(reference(), 'json', {target});
+    expect(plain.schemaRef).toBeUndefined();
+    expect(plain.revision).toBe('1');
+    expect(() => provider.stat(reference({schemaRef}), 'json', {target})).toThrowError(
+      expect.objectContaining({code: 'NAMED_DATA_SCHEMA_UNRESOLVED'})
+    );
+    await extension.dispose();
+  });
+
   it('resolves canonical JSON and YAML as replayable UTF-8 bodies', () => {
     const extension = new StructuredDataExtension(Scratch, true, true);
     const target = {};

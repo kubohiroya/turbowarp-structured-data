@@ -1,6 +1,7 @@
 export const STRUCTURED_DATA_MVP_DEFAULT = false;
 export const NAMED_DATA_REGISTRY_MVP_DEFAULT = false;
 export const NAMED_DATA_SCHEMA_REF_DEFAULT = false;
+export const STRUCTURED_SCHEMA_DEFAULT = false;
 
 export function isNamedDataSchemaRefEnabled(
   source: {__TW_NAMED_DATA_FEATURE_FLAGS__?: {NAMED_DATA_SCHEMA_REF?: unknown}} =
@@ -26,6 +27,13 @@ export function isNamedDataRegistryMvpEnabled(
 ): boolean {
   const value = source.NAMED_DATA_REGISTRY_MVP;
   return value === undefined ? NAMED_DATA_REGISTRY_MVP_DEFAULT : value === true || value === 'true';
+}
+
+export function isStructuredSchemaEnabled(
+  source: {STRUCTURED_SCHEMA?: unknown} = globalThis as {STRUCTURED_SCHEMA?: unknown}
+): boolean {
+  const value = source.STRUCTURED_SCHEMA;
+  return value === undefined ? STRUCTURED_SCHEMA_DEFAULT : value === true || value === 'true';
 }
 
 export const extensionConfig = {

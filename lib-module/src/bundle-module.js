@@ -12,6 +12,10 @@ function isNamedDataRegistryMvpEnabled(source = globalThis) {
 	const value = source.NAMED_DATA_REGISTRY_MVP;
 	return value === void 0 ? false : value === true || value === "true";
 }
+function isStructuredSchemaEnabled(source = globalThis) {
+	const value = source.STRUCTURED_SCHEMA;
+	return value === void 0 ? false : value === true || value === "true";
+}
 var extensionConfig = {
 	id: "kubohiroyastructureddata",
 	slug: "structured-data",
@@ -293,10 +297,11 @@ var jsonValueSchemaBundle = Object.freeze({
 	}
 });
 var StructuredDataError = class extends Error {
-	constructor(code, message) {
+	constructor(code, message, details = {}) {
 		super(`${code}: ${message}`);
 		this.name = "StructuredDataError";
 		this.code = code;
+		this.details = details;
 	}
 };
 function parseJson(text) {
@@ -876,7 +881,8 @@ var block_definitions_default = {
 				"INVALID_PATH",
 				"PATH_NOT_FOUND",
 				"TYPE_MISMATCH",
-				"INDEX_OUT_OF_RANGE"
+				"INDEX_OUT_OF_RANGE",
+				"SCHEMA_VALIDATION_FAILED"
 			],
 			"server": {
 				"supported": true,
@@ -908,7 +914,8 @@ var block_definitions_default = {
 				"INVALID_PATH",
 				"PATH_NOT_FOUND",
 				"TYPE_MISMATCH",
-				"INDEX_OUT_OF_RANGE"
+				"INDEX_OUT_OF_RANGE",
+				"SCHEMA_VALIDATION_FAILED"
 			],
 			"server": {
 				"supported": true,
@@ -1063,9 +1070,525 @@ var block_definitions_default = {
 				"supported": true,
 				"irOperation": "structuredData.currentValue"
 			}
+		},
+		{
+			"opcode": "defineSchema",
+			"blockType": "COMMAND",
+			"text": "define schema [SCHEMA_ID] version [VERSION] from JSON [TEXT]",
+			"description": "Register a reusable Schema document from JSON text under a stable id and version.",
+			"arguments": {
+				"SCHEMA_ID": {
+					"type": "STRING",
+					"defaultValue": "sensor.reading"
+				},
+				"VERSION": {
+					"type": "STRING",
+					"defaultValue": "1.0.0"
+				},
+				"TEXT": {
+					"type": "STRING",
+					"defaultValue": "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}"
+				}
+			},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": ["INVALID_SCHEMA"],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.defineSchema"
+			}
+		},
+		{
+			"opcode": "beginSchema",
+			"blockType": "COMMAND",
+			"text": "begin schema [SCHEMA_ID] version [VERSION] extra properties [EXTRA]",
+			"description": "Start a visual Schema definition for an object, replacing any open draft.",
+			"arguments": {
+				"SCHEMA_ID": {
+					"type": "STRING",
+					"defaultValue": "sensor.reading"
+				},
+				"VERSION": {
+					"type": "STRING",
+					"defaultValue": "1.0.0"
+				},
+				"EXTRA": {
+					"type": "STRING",
+					"defaultValue": "reject"
+				}
+			},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": ["INVALID_SCHEMA"],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.beginSchema"
+			}
+		},
+		{
+			"opcode": "addSchemaProperty",
+			"blockType": "COMMAND",
+			"text": "add property [PROPERTY] type [TYPE] [REQUIRED]",
+			"description": "Add one property of the subset types to the open visual Schema draft.",
+			"arguments": {
+				"PROPERTY": {
+					"type": "STRING",
+					"defaultValue": "name"
+				},
+				"TYPE": {
+					"type": "STRING",
+					"defaultValue": "string"
+				},
+				"REQUIRED": {
+					"type": "STRING",
+					"defaultValue": "required"
+				}
+			},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": ["INVALID_SCHEMA"],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.addSchemaProperty"
+			}
+		},
+		{
+			"opcode": "commitSchema",
+			"blockType": "COMMAND",
+			"text": "commit schema",
+			"description": "Register the open visual draft as the same canonical Schema a text definition produces.",
+			"arguments": {},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": ["INVALID_SCHEMA"],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.commitSchema"
+			}
+		},
+		{
+			"opcode": "hasSchema",
+			"blockType": "BOOLEAN",
+			"text": "schema [SCHEMA_ID] version [VERSION] exists?",
+			"description": "Report whether the current target has that Schema registered.",
+			"arguments": {
+				"SCHEMA_ID": {
+					"type": "STRING",
+					"defaultValue": "sensor.reading"
+				},
+				"VERSION": {
+					"type": "STRING",
+					"defaultValue": "1.0.0"
+				}
+			},
+			"resultType": "boolean",
+			"effect": "pure",
+			"immutable": true,
+			"errors": ["INVALID_SCHEMA"],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.hasSchema"
+			}
+		},
+		{
+			"opcode": "deleteSchema",
+			"blockType": "COMMAND",
+			"text": "delete schema [SCHEMA_ID] version [VERSION]",
+			"description": "Delete a registered Schema; bindings already validated against it keep their values.",
+			"arguments": {
+				"SCHEMA_ID": {
+					"type": "STRING",
+					"defaultValue": "sensor.reading"
+				},
+				"VERSION": {
+					"type": "STRING",
+					"defaultValue": "1.0.0"
+				}
+			},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": ["INVALID_SCHEMA", "SCHEMA_NOT_FOUND"],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.deleteSchema"
+			}
+		},
+		{
+			"opcode": "parseJsonWithSchema",
+			"blockType": "COMMAND",
+			"text": "parse JSON [TEXT] as [NAME] with schema [SCHEMA_ID] version [VERSION]",
+			"description": "Parse JSON text and bind it only when it matches the named Schema.",
+			"arguments": {
+				"TEXT": {
+					"type": "STRING",
+					"defaultValue": "{\"name\":\"TurboWarp\"}"
+				},
+				"NAME": {
+					"type": "STRING",
+					"defaultValue": "data"
+				},
+				"SCHEMA_ID": {
+					"type": "STRING",
+					"defaultValue": "sensor.reading"
+				},
+				"VERSION": {
+					"type": "STRING",
+					"defaultValue": "1.0.0"
+				}
+			},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": [
+				"INVALID_JSON",
+				"INVALID_NAME",
+				"PARSE_LIMIT_EXCEEDED",
+				"INVALID_SCHEMA",
+				"SCHEMA_NOT_FOUND",
+				"SCHEMA_VALIDATION_FAILED"
+			],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.parseJsonWithSchema"
+			}
+		},
+		{
+			"opcode": "parseYamlWithSchema",
+			"blockType": "COMMAND",
+			"text": "parse YAML [TEXT] as [NAME] with schema [SCHEMA_ID] version [VERSION]",
+			"description": "Parse safe YAML text and bind it only when it matches the named Schema.",
+			"arguments": {
+				"TEXT": {
+					"type": "STRING",
+					"defaultValue": "name: TurboWarp"
+				},
+				"NAME": {
+					"type": "STRING",
+					"defaultValue": "data"
+				},
+				"SCHEMA_ID": {
+					"type": "STRING",
+					"defaultValue": "sensor.reading"
+				},
+				"VERSION": {
+					"type": "STRING",
+					"defaultValue": "1.0.0"
+				}
+			},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": [
+				"INVALID_YAML",
+				"INVALID_NAME",
+				"PARSE_LIMIT_EXCEEDED",
+				"INVALID_SCHEMA",
+				"SCHEMA_NOT_FOUND",
+				"SCHEMA_VALIDATION_FAILED"
+			],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.parseYamlWithSchema"
+			}
+		},
+		{
+			"opcode": "schemaOf",
+			"blockType": "REPORTER",
+			"text": "schema of [NAME]",
+			"description": "Return the schemaRef bound to named data as JSON, or an empty object when it has none.",
+			"arguments": { "NAME": {
+				"type": "STRING",
+				"defaultValue": "data"
+			} },
+			"resultType": "jsonText",
+			"effect": "pure",
+			"immutable": true,
+			"errors": ["INVALID_NAME", "DATA_NOT_FOUND"],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.schemaOf"
+			}
 		}
 	]
 };
+/**
+* A small JSON Schema validator for function arguments and returns. It interprets the schema at run time and
+* never generates code, so it also works where `eval` is unavailable (for example Cloudflare Workers).
+*
+* Supported keywords: type, properties, required, additionalProperties (boolean), items, enum,
+* const, minimum, maximum, minLength, maxLength, minItems, maxItems. Other keywords, such as
+* description and title, are ignored.
+*/
+function validateAgainstSchema(value, schema, path = "$") {
+	const rule = asRecord(schema);
+	if (!rule) throw new Error(`${path} must be a JSON Schema object`);
+	assertSchemaNode(rule, path);
+	return validateValue(value, rule, path);
+}
+/** Reject malformed schemas before a function definition or call can use them. */
+function validateSchemaDefinition(schema, label = "schema") {
+	const rule = asRecord(schema);
+	if (!rule) throw new Error(`${label} must be a JSON object`);
+	assertSchemaNode(rule, label);
+}
+function validateValue(value, rule, path) {
+	const errors = [];
+	if (rule.type !== void 0) {
+		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
+		if (!types.some((type) => matchesType(value, type))) return [`${path} must be ${types.join(" or ")}`];
+	}
+	if (Array.isArray(rule.enum) && !rule.enum.some((candidate) => deepEqual(candidate, value))) errors.push(`${path} must be one of ${rule.enum.map((item) => JSON.stringify(item)).join(", ")}`);
+	if ("const" in rule && !deepEqual(rule.const, value)) errors.push(`${path} must be ${JSON.stringify(rule.const)}`);
+	if (typeof value === "number") {
+		if (typeof rule.minimum === "number" && value < rule.minimum) errors.push(`${path} must be >= ${rule.minimum}`);
+		if (typeof rule.maximum === "number" && value > rule.maximum) errors.push(`${path} must be <= ${rule.maximum}`);
+	}
+	if (typeof value === "string") {
+		const length = [...value].length;
+		if (typeof rule.minLength === "number" && length < rule.minLength) errors.push(`${path} must have at least ${rule.minLength} characters`);
+		if (typeof rule.maxLength === "number" && length > rule.maxLength) errors.push(`${path} must have at most ${rule.maxLength} characters`);
+	}
+	if (Array.isArray(value)) {
+		if (typeof rule.minItems === "number" && value.length < rule.minItems) errors.push(`${path} must have at least ${rule.minItems} items`);
+		if (typeof rule.maxItems === "number" && value.length > rule.maxItems) errors.push(`${path} must have at most ${rule.maxItems} items`);
+		if (rule.items !== void 0) value.forEach((item, index) => errors.push(...validateValue(item, rule.items, `${path}[${index}]`)));
+	}
+	const object = asRecord(value);
+	if (object) {
+		const properties = asRecord(rule.properties) ?? {};
+		if (Array.isArray(rule.required)) {
+			for (const name of rule.required) if (typeof name === "string" && !Object.hasOwn(object, name)) errors.push(`${path}.${name} is required`);
+		}
+		for (const [name, child] of Object.entries(object)) if (Object.hasOwn(properties, name)) errors.push(...validateValue(child, properties[name], `${path}.${name}`));
+		else if (rule.additionalProperties === false) errors.push(`${path}.${name} is not allowed`);
+	}
+	return errors;
+}
+function assertSchemaNode(rule, path) {
+	const validTypes = /* @__PURE__ */ new Set([
+		"object",
+		"array",
+		"string",
+		"number",
+		"integer",
+		"boolean",
+		"null"
+	]);
+	if (rule.type !== void 0) {
+		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
+		if (types.length === 0 || types.some((type) => typeof type !== "string" || !validTypes.has(type))) throw new Error(`${path}.type must be a supported JSON Schema type or non-empty type array`);
+	}
+	if (rule.properties !== void 0) {
+		const properties = asRecord(rule.properties);
+		if (!properties) throw new Error(`${path}.properties must be an object`);
+		for (const [name, child] of Object.entries(properties)) {
+			const childRule = asRecord(child);
+			if (!childRule) throw new Error(`${path}.properties.${name} must be a JSON Schema object`);
+			assertSchemaNode(childRule, `${path}.properties.${name}`);
+		}
+	}
+	if (rule.required !== void 0 && (!Array.isArray(rule.required) || rule.required.some((name) => typeof name !== "string"))) throw new Error(`${path}.required must be an array of strings`);
+	if (rule.additionalProperties !== void 0 && typeof rule.additionalProperties !== "boolean") throw new Error(`${path}.additionalProperties must be a boolean`);
+	if (rule.items !== void 0) {
+		const items = asRecord(rule.items);
+		if (!items) throw new Error(`${path}.items must be a JSON Schema object`);
+		assertSchemaNode(items, `${path}.items`);
+	}
+	if (rule.enum !== void 0 && (!Array.isArray(rule.enum) || rule.enum.length === 0)) throw new Error(`${path}.enum must be a non-empty array`);
+	for (const keyword of ["minimum", "maximum"]) if (rule[keyword] !== void 0 && (typeof rule[keyword] !== "number" || !Number.isFinite(rule[keyword]))) throw new Error(`${path}.${keyword} must be a finite number`);
+	for (const keyword of [
+		"minLength",
+		"maxLength",
+		"minItems",
+		"maxItems"
+	]) {
+		const value = rule[keyword];
+		if (value !== void 0 && (typeof value !== "number" || !Number.isInteger(value) || value < 0)) throw new Error(`${path}.${keyword} must be a non-negative integer`);
+	}
+	if (typeof rule.minimum === "number" && typeof rule.maximum === "number" && rule.minimum > rule.maximum) throw new Error(`${path}.minimum cannot exceed maximum`);
+	if (typeof rule.minLength === "number" && typeof rule.maxLength === "number" && rule.minLength > rule.maxLength) throw new Error(`${path}.minLength cannot exceed maxLength`);
+	if (typeof rule.minItems === "number" && typeof rule.maxItems === "number" && rule.minItems > rule.maxItems) throw new Error(`${path}.minItems cannot exceed maxItems`);
+}
+function matchesType(value, type) {
+	switch (type) {
+		case "object": return asRecord(value) !== null;
+		case "array": return Array.isArray(value);
+		case "string": return typeof value === "string";
+		case "number": return typeof value === "number" && Number.isFinite(value);
+		case "integer": return typeof value === "number" && Number.isInteger(value);
+		case "boolean": return typeof value === "boolean";
+		case "null": return value === null;
+		default: return false;
+	}
+}
+function deepEqual(left, right) {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+function asRecord(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
+}
+var SCHEMA_PROPERTY_TYPES = [
+	"object",
+	"array",
+	"string",
+	"number",
+	"integer",
+	"boolean",
+	"null"
+];
+var SCHEMA_ID_PATTERN = /^[a-z][a-z0-9.-]{0,127}$/u;
+/** Complete Semantic Version, matching the named-data schemaRef contract. */
+var SCHEMA_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*))*))?(?:\+([\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*))?$/u;
+function schemaKey(reference) {
+	return `${reference.id}@${reference.version}`;
+}
+function parseSchemaReference(rawId, rawVersion) {
+	const id = String(rawId).trim();
+	const version = String(rawVersion).trim();
+	if (!SCHEMA_ID_PATTERN.test(id)) throw new StructuredDataError("INVALID_SCHEMA", `Schema id must match ${SCHEMA_ID_PATTERN.source}: ${id}`, { schemaId: id });
+	if (!SCHEMA_VERSION_PATTERN.test(version)) throw new StructuredDataError("INVALID_SCHEMA", `Schema version must be a complete Semantic Version: ${version}`, {
+		schemaId: id,
+		schemaVersion: version
+	});
+	return {
+		id,
+		version
+	};
+}
+/** Reads a Schema document from JSON text and refuses malformed schemas before they are stored. */
+function parseSchemaDocument(text, reference) {
+	let document;
+	try {
+		document = parseJson(text);
+	} catch {
+		throw new StructuredDataError("INVALID_SCHEMA", "Schema must be valid JSON.", {
+			schemaId: reference.id,
+			schemaVersion: reference.version
+		});
+	}
+	return assertSchemaDocument(document, reference);
+}
+function assertSchemaDocument(document, reference) {
+	try {
+		validateSchemaDefinition(document, "schema");
+	} catch (error) {
+		throw new StructuredDataError("INVALID_SCHEMA", error instanceof Error ? error.message : String(error), {
+			schemaId: reference.id,
+			schemaVersion: reference.version
+		});
+	}
+	return document;
+}
+function schemaEntry(reference, document) {
+	return {
+		reference,
+		canonical: stringifyJson(document),
+		document
+	};
+}
+/**
+* Checks a whole candidate value and reports the first failure with the schema identity, the data
+* name, the failing path and the expectation. Callers validate the complete candidate before they
+* replace a binding, so a rejected update leaves the previous value in place.
+*/
+function assertValueMatchesSchema(value, entry, dataName) {
+	const [first] = validateAgainstSchema(value, entry.document);
+	if (first === void 0) return;
+	const { path, expected } = splitDiagnostic(first);
+	throw new StructuredDataError("SCHEMA_VALIDATION_FAILED", `Structured data ${dataName} does not match schema ${schemaKey(entry.reference)}: ${first}`, {
+		dataName,
+		schemaId: entry.reference.id,
+		schemaVersion: entry.reference.version,
+		path,
+		expected
+	});
+}
+function beginSchemaDraft(reference, additionalProperties) {
+	return {
+		reference,
+		additionalProperties,
+		properties: /* @__PURE__ */ new Map(),
+		required: /* @__PURE__ */ new Set()
+	};
+}
+function addDraftProperty(draft, rawProperty, rawType, required) {
+	const property = String(rawProperty).trim();
+	if (property.length === 0) throw new StructuredDataError("INVALID_SCHEMA", "Property name cannot be empty.", {
+		schemaId: draft.reference.id,
+		schemaVersion: draft.reference.version
+	});
+	const type = String(rawType).trim();
+	if (!SCHEMA_PROPERTY_TYPES.includes(type)) throw new StructuredDataError("INVALID_SCHEMA", `Property type must be one of ${SCHEMA_PROPERTY_TYPES.join(", ")}: ${type}`, {
+		schemaId: draft.reference.id,
+		schemaVersion: draft.reference.version,
+		path: `$.${property}`,
+		expected: SCHEMA_PROPERTY_TYPES.join(" or ")
+	});
+	draft.properties.set(property, type);
+	if (required) draft.required.add(property);
+	else draft.required.delete(property);
+}
+/**
+* Converts a draft to the same canonical document a text definition of the same shape produces.
+* Property order never matters: object keys are canonicalized and `required` is sorted.
+*/
+function draftToSchemaDocument(draft) {
+	const properties = {};
+	for (const [property, type] of draft.properties) properties[property] = { type };
+	const document = {
+		type: "object",
+		properties,
+		additionalProperties: draft.additionalProperties
+	};
+	if (draft.required.size > 0) document.required = [...draft.required].sort();
+	return document;
+}
+function parseAdditionalProperties(raw, reference) {
+	const value = String(raw).trim();
+	if (value === "allow") return true;
+	if (value === "reject") return false;
+	throw new StructuredDataError("INVALID_SCHEMA", `Extra properties must be allow or reject: ${value}`, {
+		schemaId: reference.id,
+		schemaVersion: reference.version,
+		expected: "allow or reject"
+	});
+}
+function parseRequiredFlag(raw, reference) {
+	const value = String(raw).trim();
+	if (value === "required") return true;
+	if (value === "optional") return false;
+	throw new StructuredDataError("INVALID_SCHEMA", `Property requirement must be required or optional: ${value}`, {
+		schemaId: reference.id,
+		schemaVersion: reference.version,
+		expected: "required or optional"
+	});
+}
+var DIAGNOSTIC_PREDICATES = [
+	" must be ",
+	" must have ",
+	" is required",
+	" is not allowed"
+];
+/**
+* Splits a shared-validator diagnostic into its path and expectation. The message text itself is
+* kept verbatim so a failure reads the same here as it does for a named function argument.
+*/
+function splitDiagnostic(message) {
+	const boundary = DIAGNOSTIC_PREDICATES.map((predicate) => message.indexOf(predicate)).filter((index) => index >= 0).sort((left, right) => left - right)[0];
+	if (boundary === void 0) return {
+		path: "$",
+		expected: message
+	};
+	return {
+		path: message.slice(0, boundary),
+		expected: message.slice(boundary + 1).replace(/^(?:must be|must have|is) /u, "")
+	};
+}
 var STRUCTURED_DATA_NAMESPACE = "structured";
 var STRUCTURED_BODY_MAX_BYTES = 262144;
 var StructuredDataNamedDataProvider = class {
@@ -1155,11 +1678,26 @@ var StructuredDataNamedDataProvider = class {
 };
 var LOOP_STATE = "structuredDataLoopState";
 var blockDefinitions = block_definitions_default.blocks;
+/** Blocks that only appear while the startup-fixed schema flag is on. */
+var SCHEMA_OPCODES = /* @__PURE__ */ new Set([
+	"defineSchema",
+	"beginSchema",
+	"addSchemaProperty",
+	"commitSchema",
+	"hasSchema",
+	"deleteSchema",
+	"parseJsonWithSchema",
+	"parseYamlWithSchema",
+	"schemaOf"
+]);
 var StructuredDataExtension = class {
-	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled()) {
+	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaEnabled = isStructuredSchemaEnabled()) {
 		this.scratch = scratch;
+		this.schemaEnabled = schemaEnabled;
 		this.disposed = false;
 		this.registries = /* @__PURE__ */ new WeakMap();
+		this.schemaRegistries = /* @__PURE__ */ new WeakMap();
+		this.schemaDrafts = /* @__PURE__ */ new WeakMap();
 		this.iterationStacks = /* @__PURE__ */ new WeakMap();
 		this.nextRevision = 1;
 		this.enabled = enabled;
@@ -1218,7 +1756,7 @@ var StructuredDataExtension = class {
 			name: this.scratch.translate(block_definitions_default.extensionName),
 			docsURI: extensionConfig.docsURI,
 			blockIconURI: extensionConfig.blockIconURI,
-			blocks: this.enabled ? blockDefinitions.map((block) => this.toScratchBlock(block)) : []
+			blocks: this.enabled ? blockDefinitions.filter((block) => this.schemaEnabled || !SCHEMA_OPCODES.has(block.opcode)).map((block) => this.toScratchBlock(block)) : []
 		};
 	}
 	parseJson(args, util) {
@@ -1250,11 +1788,13 @@ var StructuredDataExtension = class {
 	setJsonAtPath(args, util) {
 		const name = this.name(args.NAME);
 		const updated = setAtPath(this.requireDataByName(util.target, name), this.path(args.PATH), parseJson(this.scratch.Cast.toString(args.VALUE)));
+		this.assertCandidate(util.target, name, updated);
 		this.setBinding(util.target, name, updated);
 	}
 	deleteAtPath(args, util) {
 		const name = this.name(args.NAME);
 		const updated = deleteAtPath(this.requireDataByName(util.target, name), this.path(args.PATH));
+		this.assertCandidate(util.target, name, updated);
 		this.setBinding(util.target, name, updated);
 	}
 	keysAtPath(args, util) {
@@ -1300,6 +1840,103 @@ var StructuredDataExtension = class {
 	currentValueJson(_args, util) {
 		return stringifyJson(this.currentIteration(util.thread).value);
 	}
+	defineSchema(args, util) {
+		this.requireSchemaSupport();
+		const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+		const document = parseSchemaDocument(this.scratch.Cast.toString(args.TEXT), reference);
+		this.schemaRegistryFor(util.target).set(schemaKey(reference), schemaEntry(reference, document));
+	}
+	beginSchema(args, util) {
+		this.requireSchemaSupport();
+		const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+		const additionalProperties = parseAdditionalProperties(this.scratch.Cast.toString(args.EXTRA), reference);
+		this.schemaDrafts.set(util.target, beginSchemaDraft(reference, additionalProperties));
+	}
+	addSchemaProperty(args, util) {
+		this.requireSchemaSupport();
+		const draft = this.requireDraft(util.target);
+		addDraftProperty(draft, this.scratch.Cast.toString(args.PROPERTY), this.scratch.Cast.toString(args.TYPE), parseRequiredFlag(this.scratch.Cast.toString(args.REQUIRED), draft.reference));
+	}
+	commitSchema(_args, util) {
+		this.requireSchemaSupport();
+		const draft = this.requireDraft(util.target);
+		const entry = schemaEntry(draft.reference, draftToSchemaDocument(draft));
+		this.schemaRegistryFor(util.target).set(schemaKey(draft.reference), entry);
+		this.schemaDrafts.delete(util.target);
+	}
+	hasSchema(args, util) {
+		this.requireSchemaSupport();
+		return this.schemaRegistryFor(util.target).has(schemaKey(parseSchemaReference(args.SCHEMA_ID, args.VERSION)));
+	}
+	deleteSchema(args, util) {
+		this.requireSchemaSupport();
+		const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+		if (!this.schemaRegistryFor(util.target).delete(schemaKey(reference))) this.schemaNotFound(reference);
+	}
+	parseJsonWithSchema(args, util) {
+		this.storeWithSchema(args, util, parseJsonDocument, "json");
+	}
+	parseYamlWithSchema(args, util) {
+		this.storeWithSchema(args, util, parseYamlDocument, "yaml");
+	}
+	schemaOf(args, util) {
+		this.requireSchemaSupport();
+		const name = this.name(args.NAME);
+		const binding = this.registryFor(util.target).get(name);
+		if (binding === void 0) this.dataNotFound(name);
+		const reference = binding.schemaRef;
+		return stringifyJson(reference === void 0 ? {} : {
+			id: reference.id,
+			version: reference.version
+		});
+	}
+	/** Parses a document and binds it only when the whole value matches the referenced Schema. */
+	storeWithSchema(args, util, decode, nativeRepresentation) {
+		this.requireSchemaSupport();
+		const reference = parseSchemaReference(args.SCHEMA_ID, args.VERSION);
+		const entry = this.requireSchema(util.target, reference);
+		const name = this.name(args.NAME);
+		const candidate = decode(this.scratch.Cast.toString(args.TEXT));
+		assertValueMatchesSchema(candidate, entry, name);
+		this.setBinding(util.target, name, candidate, nativeRepresentation, entry.reference);
+	}
+	/**
+	* Checks a candidate for a schema-bound binding before it replaces the stored value. Every path
+	* writer builds its candidate immutably, so a rejection leaves the previous binding untouched.
+	*/
+	assertCandidate(target, name, candidate) {
+		const reference = this.registryFor(target).get(name)?.schemaRef;
+		if (reference === void 0) return;
+		assertValueMatchesSchema(candidate, this.requireSchema(target, reference), name);
+	}
+	requireSchema(target, reference) {
+		const entry = this.schemaRegistryFor(target).get(schemaKey(reference));
+		if (entry === void 0) this.schemaNotFound(reference);
+		return entry;
+	}
+	requireDraft(target) {
+		const draft = this.schemaDrafts.get(target);
+		if (!draft) throw new StructuredDataError("INVALID_SCHEMA", "No schema definition is open; use the begin schema block first.");
+		return draft;
+	}
+	schemaRegistryFor(target) {
+		let registry = this.schemaRegistries.get(target);
+		if (!registry) {
+			registry = /* @__PURE__ */ new Map();
+			this.schemaRegistries.set(target, registry);
+		}
+		return registry;
+	}
+	requireSchemaSupport() {
+		if (this.schemaEnabled) return;
+		throw new StructuredDataError("INVALID_SCHEMA", "Schema support is off; set STRUCTURED_SCHEMA before the extension loads.");
+	}
+	schemaNotFound(reference) {
+		throw new StructuredDataError("SCHEMA_NOT_FOUND", `Schema does not exist: ${schemaKey(reference)}`, {
+			schemaId: reference.id,
+			schemaVersion: reference.version
+		});
+	}
 	store(target, rawName, value, nativeRepresentation) {
 		this.setBinding(target, this.name(rawName), value, nativeRepresentation);
 	}
@@ -1319,13 +1956,16 @@ var StructuredDataExtension = class {
 		}
 		return registry;
 	}
-	setBinding(target, name, value, nativeRepresentation) {
+	setBinding(target, name, value, nativeRepresentation, schemaRef) {
 		const registry = this.registryFor(target);
-		const retainedRepresentation = nativeRepresentation ?? registry.get(name)?.nativeRepresentation ?? "json";
+		const previous = registry.get(name);
+		const retainedRepresentation = nativeRepresentation ?? previous?.nativeRepresentation ?? "json";
+		const retainedSchemaRef = schemaRef ?? (nativeRepresentation === void 0 ? previous?.schemaRef : void 0);
 		registry.set(name, {
 			value,
 			revision: this.nextRevision,
-			nativeRepresentation: retainedRepresentation
+			nativeRepresentation: retainedRepresentation,
+			...retainedSchemaRef === void 0 ? {} : { schemaRef: retainedSchemaRef }
 		});
 		this.nextRevision += 1;
 	}
@@ -1356,6 +1996,8 @@ var StructuredDataExtension = class {
 	clearRuntimeState() {
 		this.namedDataProvider?.clearSession();
 		this.registries = /* @__PURE__ */ new WeakMap();
+		this.schemaRegistries = /* @__PURE__ */ new WeakMap();
+		this.schemaDrafts = /* @__PURE__ */ new WeakMap();
 		this.iterationStacks = /* @__PURE__ */ new WeakMap();
 		this.nextRevision = 1;
 	}
