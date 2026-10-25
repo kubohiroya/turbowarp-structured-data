@@ -1,5 +1,7 @@
 # TurboWarp-Structured-Data
 
+<img src="assets/block-icon.svg" alt="" width="48" height="48">
+
 [日本語](README.ja.md)
 
 Named structured data with safe JSON/YAML codecs, deterministic path operations, bounded iteration, and a server compiler contract.
