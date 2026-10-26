@@ -64,7 +64,7 @@ schema id and version, failing path and expectation, so callers never parse the 
 ## Installation
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.7.1
+pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.8.0
 ```
 
 ## Quick start
