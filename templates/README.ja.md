@@ -185,6 +185,7 @@ sb3-toolchain側の統合buildは[sb3-toolchain #65](https://github.com/kubohiro
 `engines`のNode.jsと、`packageManager`に宣言したpnpmを使用します。
 
 ```bash
+npm install --global corepack@latest
 corepack enable
 pnpm install --frozen-lockfile
 pnpm check
