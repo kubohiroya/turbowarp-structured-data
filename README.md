@@ -420,6 +420,7 @@ this module entry. No runtime flag or saved-data migration is introduced.
 ## Development
 
 ```bash
+npm install --global corepack@latest
 corepack enable
 pnpm install --frozen-lockfile
 pnpm run check
