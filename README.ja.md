@@ -9,6 +9,17 @@
 編集metadataとpure owner検証は`./editor-metadata`で公開し、編集用Schema compileとAjvは共通GUIが担当します。
 再生用JSには編集エンジンを同梱しません。[編集とruntimeの境界](docs/editor-runtime-boundary.ja.md)を参照してください。
 
+## 実行できるサンプル
+
+[**TurboWarp Editorでデモを開く**](https://turbowarp.org/editor?project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-structured-data%2Fsamples%2Fedit-json-profile.sb3) · [SB3をダウンロード](https://kubohiroya.github.io/turbowarp-structured-data/samples/edit-json-profile.sb3)
+
+**Run without sandbox**を選んで**Allow**し、緑の旗を押します。
+`parseJson`で名前と点数を登録し、`setJsonAtPath`で点数を更新、`getJsonAtPath`で表示。サンプルの元データと期待結果は[`samples/README.md`](samples/README.md)に記載しています。
+
+このサンプルは拡張生成時だけ`STRUCTURED_DATA_MVP`を有効にし、直後にホストの設定を元に戻します。拡張本体の既定OFFは変更しません。
+
+`pnpm run samples:build`でSB3を再生成し、`pnpm run samples:check`で更新漏れと生成処理を確認します。
+
 ## できること
 
 - JSONまたはYAMLをtarget-localな名前付きnamespaceへparse

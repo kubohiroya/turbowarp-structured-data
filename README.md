@@ -8,6 +8,18 @@ Named structured data with safe JSON/YAML codecs, deterministic path operations,
 
 Editor metadata and pure owner validation are available through `./editor-metadata`; the common GUI owns Schema compilation and Ajv. See [the runtime/editor boundary](docs/editor-runtime-boundary.ja.md) for compatibility and rollback details.
 
+## Runnable sample
+
+[**Open the demo in TurboWarp Editor**](https://turbowarp.org/editor?project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-structured-data%2Fsamples%2Fedit-json-profile.sb3) · [Download the SB3](https://kubohiroya.github.io/turbowarp-structured-data/samples/edit-json-profile.sb3)
+
+Select **Run without sandbox**, then **Allow**, and click the green flag.
+The updated score is 8; the profile retains its name.
+
+This sample enables `STRUCTURED_DATA_MVP` only while creating its extension instance, then restores the host flag. The extension default stays OFF.
+
+Editable sources and expected results: [`samples/README.md`](samples/README.md).
+Run `pnpm run samples:build` after source/bundle changes and `pnpm run samples:check` before committing.
+
 ## What it does
 
 - parses JSON or YAML into a target-local named namespace;
