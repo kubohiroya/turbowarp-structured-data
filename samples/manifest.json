@@ -1,0 +1,31 @@
+{
+  "baseURL": "https://kubohiroya.github.io/turbowarp-structured-data/",
+  "extension": {
+    "id": "kubohiroyastructureddata",
+    "bundle": "dist/structured-data.js",
+    "unsandboxed": true,
+    "startupFlags": {
+      "STRUCTURED_DATA_MVP": true
+    }
+  },
+  "samples": [
+    {
+      "name": "edit-json-profile",
+      "title": "Structured Data minimal demo",
+      "checks": [
+        {
+          "variable": "score",
+          "equals": "8"
+        },
+        {
+          "variable": "json",
+          "jsonEquals": {
+            "name": "TurboWarp",
+            "score": 8
+          }
+        }
+      ],
+      "instructions": "The updated score is 8; the profile retains its name."
+    }
+  ]
+}
