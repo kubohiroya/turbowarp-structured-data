@@ -2,6 +2,7 @@ export const STRUCTURED_DATA_MVP_DEFAULT = false;
 export const NAMED_DATA_REGISTRY_MVP_DEFAULT = false;
 export const NAMED_DATA_SCHEMA_REF_DEFAULT = false;
 export const STRUCTURED_SCHEMA_DEFAULT = false;
+export const STRUCTURED_DOCUMENT_SOURCE_DEFAULT = false;
 
 export function isNamedDataSchemaRefEnabled(
   source: {__TW_NAMED_DATA_FEATURE_FLAGS__?: {NAMED_DATA_SCHEMA_REF?: unknown}} =
@@ -34,6 +35,14 @@ export function isStructuredSchemaEnabled(
 ): boolean {
   const value = source.STRUCTURED_SCHEMA;
   return value === undefined ? STRUCTURED_SCHEMA_DEFAULT : value === true || value === 'true';
+}
+
+/** Read once by the extension constructor; pure source adapters remain explicit opt-in APIs. */
+export function isStructuredDocumentSourceEnabled(
+  source: {STRUCTURED_DOCUMENT_SOURCE?: unknown} = globalThis as {STRUCTURED_DOCUMENT_SOURCE?: unknown}
+): boolean {
+  const value = source.STRUCTURED_DOCUMENT_SOURCE;
+  return value === undefined ? STRUCTURED_DOCUMENT_SOURCE_DEFAULT : value === true || value === 'true';
 }
 
 export const extensionConfig = {

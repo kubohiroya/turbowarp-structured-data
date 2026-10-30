@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib-source",
+    "declaration": true,
+    "types": [],
+    "noEmit": false
+  },
+  "include": ["src/document-source.ts"],
+  "exclude": ["tests", "scripts", "node_modules"]
+}

@@ -23,6 +23,11 @@ function isStructuredSchemaEnabled(source = globalThis) {
 	const value = source.STRUCTURED_SCHEMA;
 	return value === void 0 ? false : value === true || value === "true";
 }
+/** Read once by the extension constructor; pure source adapters remain explicit opt-in APIs. */
+function isStructuredDocumentSourceEnabled(source = globalThis) {
+	const value = source.STRUCTURED_DOCUMENT_SOURCE;
+	return value === void 0 ? false : value === true || value === "true";
+}
 var extensionConfig = {
 	id: "kubohiroyastructureddata",
 	slug: "structured-data",
@@ -34,275 +39,721 @@ var extensionConfig = {
 	docsURI: "https://kubohiroya.github.io/turbowarp-structured-data/",
 	blockIconURI: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3QgeD0iNCIgeT0iOCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzhBNTVENyIvPjxwYXRoIGQ9Ik0xOSAxNWMtMyAwLTIgNy01IDkgMyAyIDIgOSA1IDkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNMjkgMTVjMyAwIDIgNyA1IDktMyAyLTIgOS01IDkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSIyLjIiIGZpbGw9IiNmZmYiLz48L3N2Zz4="
 };
-var numberToken = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/u;
-var invalidNumber = Object.freeze({
-	kind: "invalid",
-	code: "fixed-number-input-invalid"
-});
 /**
-* Parse a NEW numeric draft according to NP-finite-new-input-v1.
-* Never apply this to opening/no-op raw values or use it as an owner validator.
-* Keep the validated token so negative zero, precision and exponent spelling survive.
+* Creates a JSON scanner on the given text.
+* If ignoreTrivia is set, whitespaces or comments are ignored.
 */
-function parseFixedNumberInput(input) {
-	if (typeof input === "number") {
-		if (!Number.isFinite(input)) return invalidNumber;
-		return Object.freeze({
-			kind: "valid",
-			token: Object.is(input, -0) ? "-0" : String(input),
-			value: input
-		});
-	}
-	if (typeof input !== "string") return invalidNumber;
-	const token = input.trim();
-	if (!numberToken.test(token)) return invalidNumber;
-	const value = Number(token);
-	return Number.isFinite(value) ? Object.freeze({
-		kind: "valid",
-		token,
-		value
-	}) : invalidNumber;
-}
-var block_editor_fixed_inputs_schema_default = {
-	$schema: "https://json-schema.org/draft/2020-12/schema",
-	$id: "https://kubohiroya.github.io/turbowarp-structured-data/schemas/block-editor-fixed-inputs.schema.json",
-	$defs: { "forEachAtPath": {
-		"type": "object",
-		"properties": { "MAX": {
-			"type": "integer",
-			"minimum": 1,
-			"maximum": 1e3
-		} },
-		"required": ["MAX"],
-		"additionalProperties": true
-	} }
-};
-var source$1 = {
-	repository: "turbowarp-structured-data",
-	path: "schemas/block-editor-fixed-inputs.schema.json",
-	symbol: "#/$defs/forEachAtPath/properties/MAX"
-};
-/** The on-disk owner Schema is canonical; this is its single-field projection. */
-var fixedInputSchemaBundle = {
-	identity: {
-		ownerId: "turbowarp-structured-data",
-		contractId: "forEachAtPath.MAX",
-		revision: "fixed-inputs-v1",
-		variantId: "default"
-	},
-	dialect: "2020-12",
-	root: {
-		retrievalUri: "https://kubohiroya.github.io/turbowarp-structured-data/schemas/forEachAtPath-MAX.schema.json",
-		document: block_editor_fixed_inputs_schema_default.$defs.forEachAtPath.properties.MAX,
-		artifact: {
-			role: "canonical-schema",
-			source: source$1
+function createScanner(text, ignoreTrivia = false) {
+	const len = text.length;
+	let pos = 0, value = "", tokenOffset = 0, token = 16, lineNumber = 0, lineStartOffset = 0, tokenLineStartOffset = 0, prevTokenLineStartOffset = 0, scanError = 0;
+	function scanHexDigits(count, exact) {
+		let digits = 0;
+		let value = 0;
+		while (digits < count || !exact) {
+			let ch = text.charCodeAt(pos);
+			if (ch >= 48 && ch <= 57) value = value * 16 + ch - 48;
+			else if (ch >= 65 && ch <= 70) value = value * 16 + ch - 65 + 10;
+			else if (ch >= 97 && ch <= 102) value = value * 16 + ch - 97 + 10;
+			else break;
+			pos++;
+			digits++;
 		}
-	},
-	resources: [],
-	provenance: {
-		canonicalSources: [source$1, {
-			repository: "turbowarp-structured-data",
-			path: "src/core.ts",
-			symbol: "iterationEntries"
-		}],
-		generatedFiles: [{
-			repository: "turbowarp-structured-data",
-			path: "docs/schemas/block-editor-fixed-inputs.schema.json"
-		}],
-		referenceSchemas: [],
-		generationSources: [{
-			repository: "turbowarp-structured-data",
-			path: "scripts/generate-fixed-input-docs.mjs"
-		}]
+		if (digits < count) value = -1;
+		return value;
 	}
-};
-var fixedInputEditorDefinitions = [{
-	apiVersion: 1,
-	extensionId: extensionConfig.id,
-	editorId: "forEachAtPath-fixed-inputs",
-	opcodes: [`${extensionConfig.id}_forEachAtPath`],
-	contractId: "turbowarp-structured-data:forEachAtPath.MAX",
-	contractRevision: "fixed-inputs-v1",
-	bindings: [{
-		argument: "MAX",
-		schemaBundle: fixedInputSchemaBundle,
-		control: {
-			kind: "number",
-			label: "MAX"
-		},
-		read(value) {
-			if (typeof value !== "string" && typeof value !== "number") throw new TypeError("Expected a literal maximum.");
-			if (typeof value === "string" && value.trim() === "") throw new TypeError("Blank maximum stays readonly.");
-			const number = Number(value);
-			if (!Number.isFinite(number)) throw new TypeError("Maximum must be finite.");
-			return number;
-		},
-		encode(value) {
-			const parsed = parseFixedNumberInput(value);
-			if (parsed.kind !== "valid") throw new TypeError("Expected a finite numeric token.");
-			return parsed.token;
-		},
-		validateCandidate(value) {
-			const parsed = parseFixedNumberInput(value);
-			return parsed.kind === "valid" && Number.isInteger(parsed.value) && parsed.value >= 1 && parsed.value <= 1e3 ? [] : [{
-				path: "/inputs/MAX",
-				message: "Maximum must be an integer from 1 to 1000."
-			}];
-		}
-	}],
-	validationContext: () => ({
-		consumerId: extensionConfig.id,
-		nowMs: Date.now(),
-		settings: null
-	})
-}];
-/** Register metadata only; the GUI startup capability owns editor activation. */
-function registerFixedInputEditors(scratch, definitions, runtimeOverride) {
-	const host = scratch;
-	const api = host.gui?.blockEditors;
-	if (!definitions.length || api?.apiVersion !== 1 || typeof api.registerFixedInputEditor !== "function") return () => {};
-	const runtime = runtimeOverride ?? host.vm?.runtime;
-	const removers = [];
-	let active = true;
-	const dispose = () => {
-		if (!active) return;
-		active = false;
-		runtime?.off?.("RUNTIME_DISPOSED", dispose);
-		for (const remove of removers.splice(0).reverse()) remove();
-	};
-	try {
-		for (const definition of definitions) {
-			const remove = api.registerFixedInputEditor.call(api, definition);
-			if (typeof remove !== "function") throw new TypeError("Invalid fixed input registration disposer.");
-			removers.push(remove);
-		}
-		runtime?.on?.("RUNTIME_DISPOSED", dispose);
-	} catch (error) {
-		dispose();
-		throw error;
+	function setPosition(newPosition) {
+		pos = newPosition;
+		value = "";
+		tokenOffset = 0;
+		token = 16;
+		scanError = 0;
 	}
-	return dispose;
-}
-function sourceBinding(argument, bundle, read, check = read, format = "json", uiSchema) {
-	return {
-		argument,
-		variants: [{
-			variantId: "default",
-			format,
-			schemaBundle: bundle,
-			...uiSchema ? { uiSchema } : {}
-		}],
-		decode(source) {
-			return {
-				source,
-				format,
-				variantId: "default",
-				data: read(source)
-			};
-		},
-		validateSource(source, context) {
-			try {
-				read(source);
-			} catch {
-				return {
-					source,
-					result: {
-						kind: "invalid",
-						diagnostics: [{ code: "source-decode-invalid" }]
-					}
-				};
+	function scanNumber() {
+		let start = pos;
+		if (text.charCodeAt(pos) === 48) pos++;
+		else {
+			pos++;
+			while (pos < text.length && isDigit(text.charCodeAt(pos))) pos++;
+		}
+		if (pos < text.length && text.charCodeAt(pos) === 46) {
+			pos++;
+			if (pos < text.length && isDigit(text.charCodeAt(pos))) {
+				pos++;
+				while (pos < text.length && isDigit(text.charCodeAt(pos))) pos++;
+			} else {
+				scanError = 3;
+				return text.substring(start, pos);
 			}
-			try {
-				const descriptors = Object.getOwnPropertyDescriptors(context);
-				if (typeof descriptors.consumerId?.value !== "string" || typeof descriptors.nowMs?.value !== "number" || !Number.isFinite(descriptors.nowMs.value) || !descriptors.settings || !("value" in descriptors.settings)) return {
-					source,
-					result: {
-						kind: "execution-error",
-						diagnostics: [{ code: "owner-context-invalid" }]
-					}
-				};
-			} catch {
-				return {
-					source,
-					result: {
-						kind: "execution-error",
-						diagnostics: [{ code: "owner-context-invalid" }]
-					}
-				};
+		}
+		let end = pos;
+		if (pos < text.length && (text.charCodeAt(pos) === 69 || text.charCodeAt(pos) === 101)) {
+			pos++;
+			if (pos < text.length && text.charCodeAt(pos) === 43 || text.charCodeAt(pos) === 45) pos++;
+			if (pos < text.length && isDigit(text.charCodeAt(pos))) {
+				pos++;
+				while (pos < text.length && isDigit(text.charCodeAt(pos))) pos++;
+				end = pos;
+			} else scanError = 3;
+		}
+		return text.substring(start, end);
+	}
+	function scanString() {
+		let result = "", start = pos;
+		while (true) {
+			if (pos >= len) {
+				result += text.substring(start, pos);
+				scanError = 2;
+				break;
 			}
-			try {
-				check(source);
-			} catch {
-				return {
-					source,
-					result: {
-						kind: "invalid",
-						diagnostics: [{ code: "source-owner-invalid" }]
-					}
-				};
+			const ch = text.charCodeAt(pos);
+			if (ch === 34) {
+				result += text.substring(start, pos);
+				pos++;
+				break;
 			}
-			return {
-				source,
-				result: {
-					kind: "valid",
-					diagnostics: []
+			if (ch === 92) {
+				result += text.substring(start, pos);
+				pos++;
+				if (pos >= len) {
+					scanError = 2;
+					break;
 				}
-			};
+				switch (text.charCodeAt(pos++)) {
+					case 34:
+						result += "\"";
+						break;
+					case 92:
+						result += "\\";
+						break;
+					case 47:
+						result += "/";
+						break;
+					case 98:
+						result += "\b";
+						break;
+					case 102:
+						result += "\f";
+						break;
+					case 110:
+						result += "\n";
+						break;
+					case 114:
+						result += "\r";
+						break;
+					case 116:
+						result += "	";
+						break;
+					case 117:
+						const ch3 = scanHexDigits(4, true);
+						if (ch3 >= 0) result += String.fromCharCode(ch3);
+						else scanError = 4;
+						break;
+					default: scanError = 5;
+				}
+				start = pos;
+				continue;
+			}
+			if (ch >= 0 && ch <= 31) {
+				if (isLineBreak(ch)) {
+					result += text.substring(start, pos);
+					scanError = 2;
+					break;
+				} else scanError = 6;
+			}
+			pos++;
 		}
+		return result;
+	}
+	function scanNext() {
+		value = "";
+		scanError = 0;
+		tokenOffset = pos;
+		lineStartOffset = lineNumber;
+		prevTokenLineStartOffset = tokenLineStartOffset;
+		if (pos >= len) {
+			tokenOffset = len;
+			return token = 17;
+		}
+		let code = text.charCodeAt(pos);
+		if (isWhiteSpace(code)) {
+			do {
+				pos++;
+				value += String.fromCharCode(code);
+				code = text.charCodeAt(pos);
+			} while (isWhiteSpace(code));
+			return token = 15;
+		}
+		if (isLineBreak(code)) {
+			pos++;
+			value += String.fromCharCode(code);
+			if (code === 13 && text.charCodeAt(pos) === 10) {
+				pos++;
+				value += "\n";
+			}
+			lineNumber++;
+			tokenLineStartOffset = pos;
+			return token = 14;
+		}
+		switch (code) {
+			case 123:
+				pos++;
+				return token = 1;
+			case 125:
+				pos++;
+				return token = 2;
+			case 91:
+				pos++;
+				return token = 3;
+			case 93:
+				pos++;
+				return token = 4;
+			case 58:
+				pos++;
+				return token = 6;
+			case 44:
+				pos++;
+				return token = 5;
+			case 34:
+				pos++;
+				value = scanString();
+				return token = 10;
+			case 47:
+				const start = pos - 1;
+				if (text.charCodeAt(pos + 1) === 47) {
+					pos += 2;
+					while (pos < len) {
+						if (isLineBreak(text.charCodeAt(pos))) break;
+						pos++;
+					}
+					value = text.substring(start, pos);
+					return token = 12;
+				}
+				if (text.charCodeAt(pos + 1) === 42) {
+					pos += 2;
+					const safeLength = len - 1;
+					let commentClosed = false;
+					while (pos < safeLength) {
+						const ch = text.charCodeAt(pos);
+						if (ch === 42 && text.charCodeAt(pos + 1) === 47) {
+							pos += 2;
+							commentClosed = true;
+							break;
+						}
+						pos++;
+						if (isLineBreak(ch)) {
+							if (ch === 13 && text.charCodeAt(pos) === 10) pos++;
+							lineNumber++;
+							tokenLineStartOffset = pos;
+						}
+					}
+					if (!commentClosed) {
+						pos++;
+						scanError = 1;
+					}
+					value = text.substring(start, pos);
+					return token = 13;
+				}
+				value += String.fromCharCode(code);
+				pos++;
+				return token = 16;
+			case 45:
+				value += String.fromCharCode(code);
+				pos++;
+				if (pos === len || !isDigit(text.charCodeAt(pos))) return token = 16;
+			case 48:
+			case 49:
+			case 50:
+			case 51:
+			case 52:
+			case 53:
+			case 54:
+			case 55:
+			case 56:
+			case 57:
+				value += scanNumber();
+				return token = 11;
+			default:
+				while (pos < len && isUnknownContentCharacter(code)) {
+					pos++;
+					code = text.charCodeAt(pos);
+				}
+				if (tokenOffset !== pos) {
+					value = text.substring(tokenOffset, pos);
+					switch (value) {
+						case "true": return token = 8;
+						case "false": return token = 9;
+						case "null": return token = 7;
+					}
+					return token = 16;
+				}
+				value += String.fromCharCode(code);
+				pos++;
+				return token = 16;
+		}
+	}
+	function isUnknownContentCharacter(code) {
+		if (isWhiteSpace(code) || isLineBreak(code)) return false;
+		switch (code) {
+			case 125:
+			case 93:
+			case 123:
+			case 91:
+			case 34:
+			case 58:
+			case 44:
+			case 47: return false;
+		}
+		return true;
+	}
+	function scanNextNonTrivia() {
+		let result;
+		do
+			result = scanNext();
+		while (result >= 12 && result <= 15);
+		return result;
+	}
+	return {
+		setPosition,
+		getPosition: () => pos,
+		scan: ignoreTrivia ? scanNextNonTrivia : scanNext,
+		getToken: () => token,
+		getTokenValue: () => value,
+		getTokenOffset: () => tokenOffset,
+		getTokenLength: () => pos - tokenOffset,
+		getTokenStartLine: () => lineStartOffset,
+		getTokenStartCharacter: () => tokenOffset - prevTokenLineStartOffset,
+		getTokenError: () => scanError
 	};
 }
-/** The optional capability keeps legacy hosts and the startup flag safely inactive. */
-function registerSourceEditors(scratch, definitions) {
-	const host = scratch;
-	const api = host.gui?.blockEditors;
-	if (api?.apiVersion !== 1 || typeof api.registerSourceEditor !== "function") return () => {};
-	const removers = [];
-	let active = true;
-	const dispose = () => {
-		if (!active) return;
-		active = false;
-		host.vm?.runtime?.off?.("RUNTIME_DISPOSED", dispose);
-		for (const remove of removers.splice(0).reverse()) remove();
-	};
-	try {
-		for (const definition of definitions) removers.push(api.registerSourceEditor.call(api, definition));
-		host.vm?.runtime?.on?.("RUNTIME_DISPOSED", dispose);
-	} catch (error) {
-		dispose();
-		throw error;
-	}
-	return dispose;
+function isWhiteSpace(ch) {
+	return ch === 32 || ch === 9;
 }
-var source = {
-	repository: "https://github.com/kubohiroya/turbowarp-extension-data-editor",
-	path: "src/json-value.ts",
-	symbol: "jsonValueSchema"
-};
-var jsonValueSchemaBundle = Object.freeze({
-	identity: {
-		ownerId: "@kubohiroya/turbowarp-extension-data-editor",
-		contractId: "json-value",
-		revision: "1",
-		variantId: "json-value"
-	},
-	dialect: "2020-12",
-	root: {
-		retrievalUri: "https://kubohiroya.github.io/turbowarp-extension-data-editor/schemas/json-value",
-		document: true,
-		artifact: {
-			role: "canonical-schema",
-			source
-		}
-	},
-	resources: [],
-	provenance: {
-		canonicalSources: [source],
-		generatedFiles: [],
-		referenceSchemas: [],
-		generationSources: []
-	}
+function isLineBreak(ch) {
+	return ch === 10 || ch === 13;
+}
+function isDigit(ch) {
+	return ch >= 48 && ch <= 57;
+}
+var CharacterCodes;
+(function(CharacterCodes) {
+	CharacterCodes[CharacterCodes["lineFeed"] = 10] = "lineFeed";
+	CharacterCodes[CharacterCodes["carriageReturn"] = 13] = "carriageReturn";
+	CharacterCodes[CharacterCodes["space"] = 32] = "space";
+	CharacterCodes[CharacterCodes["_0"] = 48] = "_0";
+	CharacterCodes[CharacterCodes["_1"] = 49] = "_1";
+	CharacterCodes[CharacterCodes["_2"] = 50] = "_2";
+	CharacterCodes[CharacterCodes["_3"] = 51] = "_3";
+	CharacterCodes[CharacterCodes["_4"] = 52] = "_4";
+	CharacterCodes[CharacterCodes["_5"] = 53] = "_5";
+	CharacterCodes[CharacterCodes["_6"] = 54] = "_6";
+	CharacterCodes[CharacterCodes["_7"] = 55] = "_7";
+	CharacterCodes[CharacterCodes["_8"] = 56] = "_8";
+	CharacterCodes[CharacterCodes["_9"] = 57] = "_9";
+	CharacterCodes[CharacterCodes["a"] = 97] = "a";
+	CharacterCodes[CharacterCodes["b"] = 98] = "b";
+	CharacterCodes[CharacterCodes["c"] = 99] = "c";
+	CharacterCodes[CharacterCodes["d"] = 100] = "d";
+	CharacterCodes[CharacterCodes["e"] = 101] = "e";
+	CharacterCodes[CharacterCodes["f"] = 102] = "f";
+	CharacterCodes[CharacterCodes["g"] = 103] = "g";
+	CharacterCodes[CharacterCodes["h"] = 104] = "h";
+	CharacterCodes[CharacterCodes["i"] = 105] = "i";
+	CharacterCodes[CharacterCodes["j"] = 106] = "j";
+	CharacterCodes[CharacterCodes["k"] = 107] = "k";
+	CharacterCodes[CharacterCodes["l"] = 108] = "l";
+	CharacterCodes[CharacterCodes["m"] = 109] = "m";
+	CharacterCodes[CharacterCodes["n"] = 110] = "n";
+	CharacterCodes[CharacterCodes["o"] = 111] = "o";
+	CharacterCodes[CharacterCodes["p"] = 112] = "p";
+	CharacterCodes[CharacterCodes["q"] = 113] = "q";
+	CharacterCodes[CharacterCodes["r"] = 114] = "r";
+	CharacterCodes[CharacterCodes["s"] = 115] = "s";
+	CharacterCodes[CharacterCodes["t"] = 116] = "t";
+	CharacterCodes[CharacterCodes["u"] = 117] = "u";
+	CharacterCodes[CharacterCodes["v"] = 118] = "v";
+	CharacterCodes[CharacterCodes["w"] = 119] = "w";
+	CharacterCodes[CharacterCodes["x"] = 120] = "x";
+	CharacterCodes[CharacterCodes["y"] = 121] = "y";
+	CharacterCodes[CharacterCodes["z"] = 122] = "z";
+	CharacterCodes[CharacterCodes["A"] = 65] = "A";
+	CharacterCodes[CharacterCodes["B"] = 66] = "B";
+	CharacterCodes[CharacterCodes["C"] = 67] = "C";
+	CharacterCodes[CharacterCodes["D"] = 68] = "D";
+	CharacterCodes[CharacterCodes["E"] = 69] = "E";
+	CharacterCodes[CharacterCodes["F"] = 70] = "F";
+	CharacterCodes[CharacterCodes["G"] = 71] = "G";
+	CharacterCodes[CharacterCodes["H"] = 72] = "H";
+	CharacterCodes[CharacterCodes["I"] = 73] = "I";
+	CharacterCodes[CharacterCodes["J"] = 74] = "J";
+	CharacterCodes[CharacterCodes["K"] = 75] = "K";
+	CharacterCodes[CharacterCodes["L"] = 76] = "L";
+	CharacterCodes[CharacterCodes["M"] = 77] = "M";
+	CharacterCodes[CharacterCodes["N"] = 78] = "N";
+	CharacterCodes[CharacterCodes["O"] = 79] = "O";
+	CharacterCodes[CharacterCodes["P"] = 80] = "P";
+	CharacterCodes[CharacterCodes["Q"] = 81] = "Q";
+	CharacterCodes[CharacterCodes["R"] = 82] = "R";
+	CharacterCodes[CharacterCodes["S"] = 83] = "S";
+	CharacterCodes[CharacterCodes["T"] = 84] = "T";
+	CharacterCodes[CharacterCodes["U"] = 85] = "U";
+	CharacterCodes[CharacterCodes["V"] = 86] = "V";
+	CharacterCodes[CharacterCodes["W"] = 87] = "W";
+	CharacterCodes[CharacterCodes["X"] = 88] = "X";
+	CharacterCodes[CharacterCodes["Y"] = 89] = "Y";
+	CharacterCodes[CharacterCodes["Z"] = 90] = "Z";
+	CharacterCodes[CharacterCodes["asterisk"] = 42] = "asterisk";
+	CharacterCodes[CharacterCodes["backslash"] = 92] = "backslash";
+	CharacterCodes[CharacterCodes["closeBrace"] = 125] = "closeBrace";
+	CharacterCodes[CharacterCodes["closeBracket"] = 93] = "closeBracket";
+	CharacterCodes[CharacterCodes["colon"] = 58] = "colon";
+	CharacterCodes[CharacterCodes["comma"] = 44] = "comma";
+	CharacterCodes[CharacterCodes["dot"] = 46] = "dot";
+	CharacterCodes[CharacterCodes["doubleQuote"] = 34] = "doubleQuote";
+	CharacterCodes[CharacterCodes["minus"] = 45] = "minus";
+	CharacterCodes[CharacterCodes["openBrace"] = 123] = "openBrace";
+	CharacterCodes[CharacterCodes["openBracket"] = 91] = "openBracket";
+	CharacterCodes[CharacterCodes["plus"] = 43] = "plus";
+	CharacterCodes[CharacterCodes["slash"] = 47] = "slash";
+	CharacterCodes[CharacterCodes["formFeed"] = 12] = "formFeed";
+	CharacterCodes[CharacterCodes["tab"] = 9] = "tab";
+})(CharacterCodes || (CharacterCodes = {}));
+new Array(20).fill(0).map((_, index) => {
+	return " ".repeat(index);
 });
+var maxCachedValues = 200;
+new Array(maxCachedValues).fill(0).map((_, index) => {
+	return "\n" + " ".repeat(index);
+}), new Array(maxCachedValues).fill(0).map((_, index) => {
+	return "\r" + " ".repeat(index);
+}), new Array(maxCachedValues).fill(0).map((_, index) => {
+	return "\r\n" + " ".repeat(index);
+}), new Array(maxCachedValues).fill(0).map((_, index) => {
+	return "\n" + "	".repeat(index);
+}), new Array(maxCachedValues).fill(0).map((_, index) => {
+	return "\r" + "	".repeat(index);
+}), new Array(maxCachedValues).fill(0).map((_, index) => {
+	return "\r\n" + "	".repeat(index);
+});
+var ParseOptions;
+(function(ParseOptions) {
+	ParseOptions.DEFAULT = { allowTrailingComma: false };
+})(ParseOptions || (ParseOptions = {}));
+/**
+* Parses the given text and returns the object the JSON content represents. On invalid input, the parser tries to be as fault tolerant as possible, but still return a result.
+* Therefore always check the errors list to find out if the input was valid.
+*/
+function parse$2(text, errors = [], options = ParseOptions.DEFAULT) {
+	let currentProperty = null;
+	let currentParent = [];
+	const previousParents = [];
+	function onValue(value) {
+		if (Array.isArray(currentParent)) currentParent.push(value);
+		else if (currentProperty !== null) currentParent[currentProperty] = value;
+	}
+	visit$2(text, {
+		onObjectBegin: () => {
+			const object = {};
+			onValue(object);
+			previousParents.push(currentParent);
+			currentParent = object;
+			currentProperty = null;
+		},
+		onObjectProperty: (name) => {
+			currentProperty = name;
+		},
+		onObjectEnd: () => {
+			currentParent = previousParents.pop();
+		},
+		onArrayBegin: () => {
+			const array = [];
+			onValue(array);
+			previousParents.push(currentParent);
+			currentParent = array;
+			currentProperty = null;
+		},
+		onArrayEnd: () => {
+			currentParent = previousParents.pop();
+		},
+		onLiteralValue: onValue,
+		onError: (error, offset, length) => {
+			errors.push({
+				error,
+				offset,
+				length
+			});
+		}
+	}, options);
+	return currentParent[0];
+}
+/**
+* Parses the given text and invokes the visitor functions for each object, array and literal reached.
+*/
+function visit$2(text, visitor, options = ParseOptions.DEFAULT) {
+	const _scanner = createScanner(text, false);
+	const _jsonPath = [];
+	let suppressedCallbacks = 0;
+	function toNoArgVisit(visitFunction) {
+		return visitFunction ? () => suppressedCallbacks === 0 && visitFunction(_scanner.getTokenOffset(), _scanner.getTokenLength(), _scanner.getTokenStartLine(), _scanner.getTokenStartCharacter()) : () => true;
+	}
+	function toOneArgVisit(visitFunction) {
+		return visitFunction ? (arg) => suppressedCallbacks === 0 && visitFunction(arg, _scanner.getTokenOffset(), _scanner.getTokenLength(), _scanner.getTokenStartLine(), _scanner.getTokenStartCharacter()) : () => true;
+	}
+	function toOneArgVisitWithPath(visitFunction) {
+		return visitFunction ? (arg) => suppressedCallbacks === 0 && visitFunction(arg, _scanner.getTokenOffset(), _scanner.getTokenLength(), _scanner.getTokenStartLine(), _scanner.getTokenStartCharacter(), () => _jsonPath.slice()) : () => true;
+	}
+	function toBeginVisit(visitFunction) {
+		return visitFunction ? () => {
+			if (suppressedCallbacks > 0) suppressedCallbacks++;
+			else if (visitFunction(_scanner.getTokenOffset(), _scanner.getTokenLength(), _scanner.getTokenStartLine(), _scanner.getTokenStartCharacter(), () => _jsonPath.slice()) === false) suppressedCallbacks = 1;
+		} : () => true;
+	}
+	function toEndVisit(visitFunction) {
+		return visitFunction ? () => {
+			if (suppressedCallbacks > 0) suppressedCallbacks--;
+			if (suppressedCallbacks === 0) visitFunction(_scanner.getTokenOffset(), _scanner.getTokenLength(), _scanner.getTokenStartLine(), _scanner.getTokenStartCharacter());
+		} : () => true;
+	}
+	const onObjectBegin = toBeginVisit(visitor.onObjectBegin), onObjectProperty = toOneArgVisitWithPath(visitor.onObjectProperty), onObjectEnd = toEndVisit(visitor.onObjectEnd), onArrayBegin = toBeginVisit(visitor.onArrayBegin), onArrayEnd = toEndVisit(visitor.onArrayEnd), onLiteralValue = toOneArgVisitWithPath(visitor.onLiteralValue), onSeparator = toOneArgVisit(visitor.onSeparator), onComment = toNoArgVisit(visitor.onComment), onError = toOneArgVisit(visitor.onError);
+	const disallowComments = options && options.disallowComments;
+	const allowTrailingComma = options && options.allowTrailingComma;
+	function scanNext() {
+		while (true) {
+			const token = _scanner.scan();
+			switch (_scanner.getTokenError()) {
+				case 4:
+					handleError(14);
+					break;
+				case 5:
+					handleError(15);
+					break;
+				case 3:
+					handleError(13);
+					break;
+				case 1:
+					if (!disallowComments) handleError(11);
+					break;
+				case 2:
+					handleError(12);
+					break;
+				case 6: handleError(16);
+			}
+			switch (token) {
+				case 12:
+				case 13:
+					if (disallowComments) handleError(10);
+					else onComment();
+					break;
+				case 16:
+					handleError(1);
+					break;
+				case 15:
+				case 14: break;
+				default: return token;
+			}
+		}
+	}
+	function handleError(error, skipUntilAfter = [], skipUntil = []) {
+		onError(error);
+		if (skipUntilAfter.length + skipUntil.length > 0) {
+			let token = _scanner.getToken();
+			while (token !== 17) {
+				if (skipUntilAfter.indexOf(token) !== -1) {
+					scanNext();
+					break;
+				} else if (skipUntil.indexOf(token) !== -1) break;
+				token = scanNext();
+			}
+		}
+	}
+	function parseString(isValue) {
+		const value = _scanner.getTokenValue();
+		if (isValue) onLiteralValue(value);
+		else {
+			onObjectProperty(value);
+			_jsonPath.push(value);
+		}
+		scanNext();
+		return true;
+	}
+	function parseLiteral() {
+		switch (_scanner.getToken()) {
+			case 11:
+				const tokenValue = _scanner.getTokenValue();
+				let value = Number(tokenValue);
+				if (isNaN(value)) {
+					handleError(2);
+					value = 0;
+				}
+				onLiteralValue(value);
+				break;
+			case 7:
+				onLiteralValue(null);
+				break;
+			case 8:
+				onLiteralValue(true);
+				break;
+			case 9:
+				onLiteralValue(false);
+				break;
+			default: return false;
+		}
+		scanNext();
+		return true;
+	}
+	function parseProperty() {
+		if (_scanner.getToken() !== 10) {
+			handleError(3, [], [2, 5]);
+			return false;
+		}
+		parseString(false);
+		if (_scanner.getToken() === 6) {
+			onSeparator(":");
+			scanNext();
+			if (!parseValue()) handleError(4, [], [2, 5]);
+		} else handleError(5, [], [2, 5]);
+		_jsonPath.pop();
+		return true;
+	}
+	function parseObject() {
+		onObjectBegin();
+		scanNext();
+		let needsComma = false;
+		while (_scanner.getToken() !== 2 && _scanner.getToken() !== 17) {
+			if (_scanner.getToken() === 5) {
+				if (!needsComma) handleError(4, [], []);
+				onSeparator(",");
+				scanNext();
+				if (_scanner.getToken() === 2 && allowTrailingComma) break;
+			} else if (needsComma) handleError(6, [], []);
+			if (!parseProperty()) handleError(4, [], [2, 5]);
+			needsComma = true;
+		}
+		onObjectEnd();
+		if (_scanner.getToken() !== 2) handleError(7, [2], []);
+		else scanNext();
+		return true;
+	}
+	function parseArray() {
+		onArrayBegin();
+		scanNext();
+		let isFirstElement = true;
+		let needsComma = false;
+		while (_scanner.getToken() !== 4 && _scanner.getToken() !== 17) {
+			if (_scanner.getToken() === 5) {
+				if (!needsComma) handleError(4, [], []);
+				onSeparator(",");
+				scanNext();
+				if (_scanner.getToken() === 4 && allowTrailingComma) break;
+			} else if (needsComma) handleError(6, [], []);
+			if (isFirstElement) {
+				_jsonPath.push(0);
+				isFirstElement = false;
+			} else _jsonPath[_jsonPath.length - 1]++;
+			if (!parseValue()) handleError(4, [], [4, 5]);
+			needsComma = true;
+		}
+		onArrayEnd();
+		if (!isFirstElement) _jsonPath.pop();
+		if (_scanner.getToken() !== 4) handleError(8, [4], []);
+		else scanNext();
+		return true;
+	}
+	function parseValue() {
+		switch (_scanner.getToken()) {
+			case 3: return parseArray();
+			case 1: return parseObject();
+			case 10: return parseString(true);
+			default: return parseLiteral();
+		}
+	}
+	scanNext();
+	if (_scanner.getToken() === 17) {
+		if (options.allowEmptyContent) return true;
+		handleError(4, [], []);
+		return false;
+	}
+	if (!parseValue()) {
+		handleError(4, [], []);
+		return false;
+	}
+	if (_scanner.getToken() !== 17) handleError(9, [], []);
+	return true;
+}
+var ScanError;
+(function(ScanError) {
+	ScanError[ScanError["None"] = 0] = "None";
+	ScanError[ScanError["UnexpectedEndOfComment"] = 1] = "UnexpectedEndOfComment";
+	ScanError[ScanError["UnexpectedEndOfString"] = 2] = "UnexpectedEndOfString";
+	ScanError[ScanError["UnexpectedEndOfNumber"] = 3] = "UnexpectedEndOfNumber";
+	ScanError[ScanError["InvalidUnicode"] = 4] = "InvalidUnicode";
+	ScanError[ScanError["InvalidEscapeCharacter"] = 5] = "InvalidEscapeCharacter";
+	ScanError[ScanError["InvalidCharacter"] = 6] = "InvalidCharacter";
+})(ScanError || (ScanError = {}));
+var SyntaxKind;
+(function(SyntaxKind) {
+	SyntaxKind[SyntaxKind["OpenBraceToken"] = 1] = "OpenBraceToken";
+	SyntaxKind[SyntaxKind["CloseBraceToken"] = 2] = "CloseBraceToken";
+	SyntaxKind[SyntaxKind["OpenBracketToken"] = 3] = "OpenBracketToken";
+	SyntaxKind[SyntaxKind["CloseBracketToken"] = 4] = "CloseBracketToken";
+	SyntaxKind[SyntaxKind["CommaToken"] = 5] = "CommaToken";
+	SyntaxKind[SyntaxKind["ColonToken"] = 6] = "ColonToken";
+	SyntaxKind[SyntaxKind["NullKeyword"] = 7] = "NullKeyword";
+	SyntaxKind[SyntaxKind["TrueKeyword"] = 8] = "TrueKeyword";
+	SyntaxKind[SyntaxKind["FalseKeyword"] = 9] = "FalseKeyword";
+	SyntaxKind[SyntaxKind["StringLiteral"] = 10] = "StringLiteral";
+	SyntaxKind[SyntaxKind["NumericLiteral"] = 11] = "NumericLiteral";
+	SyntaxKind[SyntaxKind["LineCommentTrivia"] = 12] = "LineCommentTrivia";
+	SyntaxKind[SyntaxKind["BlockCommentTrivia"] = 13] = "BlockCommentTrivia";
+	SyntaxKind[SyntaxKind["LineBreakTrivia"] = 14] = "LineBreakTrivia";
+	SyntaxKind[SyntaxKind["Trivia"] = 15] = "Trivia";
+	SyntaxKind[SyntaxKind["Unknown"] = 16] = "Unknown";
+	SyntaxKind[SyntaxKind["EOF"] = 17] = "EOF";
+})(SyntaxKind || (SyntaxKind = {}));
+/**
+* Parses the given text and returns the object the JSON content represents. On invalid input, the parser tries to be as fault tolerant as possible, but still return a result.
+* Therefore, always check the errors list to find out if the input was valid.
+*/
+var parse$1 = parse$2;
+var ParseErrorCode;
+(function(ParseErrorCode) {
+	ParseErrorCode[ParseErrorCode["InvalidSymbol"] = 1] = "InvalidSymbol";
+	ParseErrorCode[ParseErrorCode["InvalidNumberFormat"] = 2] = "InvalidNumberFormat";
+	ParseErrorCode[ParseErrorCode["PropertyNameExpected"] = 3] = "PropertyNameExpected";
+	ParseErrorCode[ParseErrorCode["ValueExpected"] = 4] = "ValueExpected";
+	ParseErrorCode[ParseErrorCode["ColonExpected"] = 5] = "ColonExpected";
+	ParseErrorCode[ParseErrorCode["CommaExpected"] = 6] = "CommaExpected";
+	ParseErrorCode[ParseErrorCode["CloseBraceExpected"] = 7] = "CloseBraceExpected";
+	ParseErrorCode[ParseErrorCode["CloseBracketExpected"] = 8] = "CloseBracketExpected";
+	ParseErrorCode[ParseErrorCode["EndOfFileExpected"] = 9] = "EndOfFileExpected";
+	ParseErrorCode[ParseErrorCode["InvalidCommentToken"] = 10] = "InvalidCommentToken";
+	ParseErrorCode[ParseErrorCode["UnexpectedEndOfComment"] = 11] = "UnexpectedEndOfComment";
+	ParseErrorCode[ParseErrorCode["UnexpectedEndOfString"] = 12] = "UnexpectedEndOfString";
+	ParseErrorCode[ParseErrorCode["UnexpectedEndOfNumber"] = 13] = "UnexpectedEndOfNumber";
+	ParseErrorCode[ParseErrorCode["InvalidUnicode"] = 14] = "InvalidUnicode";
+	ParseErrorCode[ParseErrorCode["InvalidEscapeCharacter"] = 15] = "InvalidEscapeCharacter";
+	ParseErrorCode[ParseErrorCode["InvalidCharacter"] = 16] = "InvalidCharacter";
+})(ParseErrorCode || (ParseErrorCode = {}));
+function printParseErrorCode(code) {
+	switch (code) {
+		case 1: return "InvalidSymbol";
+		case 2: return "InvalidNumberFormat";
+		case 3: return "PropertyNameExpected";
+		case 4: return "ValueExpected";
+		case 5: return "ColonExpected";
+		case 6: return "CommaExpected";
+		case 7: return "CloseBraceExpected";
+		case 8: return "CloseBracketExpected";
+		case 9: return "EndOfFileExpected";
+		case 10: return "InvalidCommentToken";
+		case 11: return "UnexpectedEndOfComment";
+		case 12: return "UnexpectedEndOfString";
+		case 13: return "UnexpectedEndOfNumber";
+		case 14: return "InvalidUnicode";
+		case 15: return "InvalidEscapeCharacter";
+		case 16: return "InvalidCharacter";
+	}
+	return "<unknown ParseErrorCode>";
+}
 var ALIAS = Symbol.for("yaml.alias");
 var DOC = Symbol.for("yaml.document");
 var MAP = Symbol.for("yaml.map");
@@ -1515,7 +1966,7 @@ function stringifyProps(node, tagObj, { anchors, doc }) {
 	if (tag) props.push(doc.directives.tagString(tag));
 	return props.join(" ");
 }
-function stringify(item, ctx, onComment, onChompKeep) {
+function stringify$1(item, ctx, onComment, onChompKeep) {
 	if (isPair(item)) return item.toString(ctx, onComment, onChompKeep);
 	if (isAlias(item)) {
 		if (ctx.doc.directives) return item.toString(ctx);
@@ -1550,7 +2001,7 @@ function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
 	});
 	let keyCommentDone = false;
 	let chompKeep = false;
-	let str = stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
+	let str = stringify$1(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
 	if (!explicitKey && !ctx.inFlow && str.length > 1024) {
 		if (simpleKeys) throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
 		explicitKey = true;
@@ -1590,7 +2041,7 @@ function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
 	chompKeep = false;
 	if (!indentSeq && indentStep.length >= 2 && !ctx.inFlow && !explicitKey && isSeq(value) && !value.flow && !value.tag && !value.anchor) ctx.indent = ctx.indent.substring(2);
 	let valueCommentDone = false;
-	const valueStr = stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
+	const valueStr = stringify$1(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
 	let ws = " ";
 	if (keyComment || vsb || vcb) {
 		ws = vsb ? "\n" : "";
@@ -1749,7 +2200,7 @@ function stringifyBlockCollection({ comment, items }, ctx, { blockItemPrefix, fl
 			}
 		}
 		chompKeep = false;
-		let str = stringify(item, itemCtx, () => comment = null, () => chompKeep = true);
+		let str = stringify$1(item, itemCtx, () => comment = null, () => chompKeep = true);
 		if (comment) str += lineComment(str, itemIndent, commentString(comment));
 		if (chompKeep && comment) chompKeep = false;
 		lines.push(blockItemPrefix + str);
@@ -1801,7 +2252,7 @@ function stringifyFlowCollection({ items }, ctx, { flowChars, itemIndent }) {
 			} else if (item.value == null && ik?.comment) comment = ik.comment;
 		}
 		if (comment) reqNewline = true;
-		let str = stringify(item, itemCtx, () => comment = null);
+		let str = stringify$1(item, itemCtx, () => comment = null);
 		reqNewline || (reqNewline = lines.length > linesAtValue || str.includes("\n"));
 		if (i < items.length - 1) str += ",";
 		else if (ctx.options.trailingComma) {
@@ -2772,11 +3223,11 @@ function stringifyDocument(doc, options) {
 			contentComment = doc.contents.comment;
 		}
 		const onChompKeep = contentComment ? void 0 : () => chompKeep = true;
-		let body = stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
+		let body = stringify$1(doc.contents, ctx, () => contentComment = null, onChompKeep);
 		if (contentComment) body += lineComment(body, "", commentString(contentComment));
 		if ((body[0] === "|" || body[0] === ">") && lines[lines.length - 1] === "---") lines[lines.length - 1] = `--- ${body}`;
 		else lines.push(body);
-	} else lines.push(stringify(doc.contents, ctx));
+	} else lines.push(stringify$1(doc.contents, ctx));
 	if (doc.directives?.docEnd) {
 		if (doc.comment) {
 			const cs = commentString(doc.comment);
@@ -5887,6 +6338,379 @@ function parseDocument(source, options = {}) {
 	}
 	return doc;
 }
+var PARSE_LIMITS$1 = {
+	maxInputBytes: 262144,
+	maxDepth: 64,
+	maxNodes: 5e4,
+	maxAliases: 0
+};
+var SIMPLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/u;
+function nullValue() {
+	return {
+		kind: "scalar",
+		value: null
+	};
+}
+function renderYaml(fragment, keyOrder = "preserve") {
+	return renderYamlValue(toValue(fragment), 0, keyOrder);
+}
+function toValue(fragment) {
+	switch (fragment.kind) {
+		case "empty": return null;
+		case "scalar": return fragment.value;
+		case "pair": return { [fragment.key]: toValue(fragment.value) };
+		case "map": return Object.fromEntries(fragment.entries.map((entry) => [entry.key, toValue(entry.value)]));
+		case "sequence": return fragment.items.map(toValue);
+		case "concat": return mergeTopLevelValues(fragment.children);
+	}
+}
+function parseData(source, format = "auto", { jsonObjects = "legacy-fragment" } = {}) {
+	const selectedFormat = resolveFormat(source, format);
+	const inputDiagnostic = validateInputSize(source);
+	if (inputDiagnostic !== null) return failure(selectedFormat, inputDiagnostic);
+	return selectedFormat === "json" ? parseJson$1(source, jsonObjects === "json") : parseYaml(source);
+}
+/** Convert only finite, acyclic JSON values through the canonical fragment builder. */
+function fromValue(value, { enforceLimits = true } = {}) {
+	const active = /* @__PURE__ */ new Set();
+	let nodes = 0;
+	const check = (item, depth) => {
+		if (++nodes > PARSE_LIMITS$1.maxNodes && enforceLimits) throw new TypeError("Value exceeds the maximum node count.");
+		if (depth > PARSE_LIMITS$1.maxDepth && enforceLimits) throw new TypeError("Value exceeds the maximum nesting depth.");
+		if (item === null || typeof item === "string" || typeof item === "boolean" || typeof item === "number" && Number.isFinite(item)) return;
+		if (typeof item !== "object") throw new TypeError("Value must contain only finite JSON data.");
+		if (active.has(item)) throw new TypeError("Cyclic JSON values are not supported.");
+		if (!Array.isArray(item) && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) throw new TypeError("JSON objects must be plain objects.");
+		if (Array.isArray(item)) {
+			for (let index = 0; index < item.length; index++) if (!Object.hasOwn(item, index)) throw new TypeError("Sparse arrays are not JSON values.");
+		}
+		active.add(item);
+		for (const key of Object.keys(item)) {
+			const descriptor = Object.getOwnPropertyDescriptor(item, key);
+			if (!Object.hasOwn(descriptor, "value")) throw new TypeError("JSON properties cannot be accessors.");
+			check(descriptor.value, depth + 1);
+		}
+		active.delete(item);
+	};
+	check(value, 0);
+	return fragmentFromUnknown(value, {
+		nodes: 0,
+		limited: enforceLimits
+	}, 0);
+}
+function mergeTopLevelValues(children) {
+	const values = children.filter((child) => child.kind !== "empty").map(toValue);
+	if (values.length === 0) return null;
+	if (values.every(isPlainObject)) return Object.assign({}, ...values);
+	return values;
+}
+function renderYamlValue(value, indent, keyOrder) {
+	if (isPlainObject(value)) {
+		const entries = Object.entries(value);
+		if (keyOrder === "unicode") entries.sort(([a], [b]) => compareKeyCodePoints(a, b));
+		if (entries.length === 0) return `${spaces(indent)}{}`;
+		return entries.map(([key, entryValue]) => renderValuePair(key, entryValue, indent, keyOrder)).join("\n");
+	}
+	if (isDataArray(value)) {
+		if (value.length === 0) return `${spaces(indent)}[]`;
+		return value.map((item) => renderSequenceItem(item, indent, keyOrder)).join("\n");
+	}
+	return `${spaces(indent)}${renderScalar(value)}`;
+}
+function renderValuePair(key, value, indent, keyOrder) {
+	const prefix = `${spaces(indent)}${renderKey(key)}:`;
+	if (!isPlainObject(value) && !isDataArray(value)) return `${prefix} ${renderScalar(value)}`;
+	return `${prefix}\n${renderYamlValue(value, indent + 2, keyOrder)}`;
+}
+function renderSequenceItem(item, indent, keyOrder) {
+	const prefix = `${spaces(indent)}-`;
+	if (!isPlainObject(item) && !isDataArray(item)) return `${prefix} ${renderScalar(item)}`;
+	return `${prefix}\n${renderYamlValue(item, indent + 2, keyOrder)}`;
+}
+function renderKey(key) {
+	return SIMPLE_KEY_PATTERN.test(key) ? key : JSON.stringify(key);
+}
+function renderScalar(value) {
+	if (value === null) return "null";
+	if (typeof value === "boolean") return value ? "true" : "false";
+	if (typeof value === "number") return String(value);
+	return JSON.stringify(value);
+}
+function formatErrorMessage(error) {
+	return error instanceof Error ? error.message : String(error);
+}
+function parseJson$1(source, nativeJsonObjects = false) {
+	const errors = [];
+	const value = parse$1(source, errors, {
+		allowEmptyContent: false,
+		allowTrailingComma: false,
+		disallowComments: true
+	});
+	const syntaxError = errors[0];
+	if (syntaxError !== void 0) return failure("json", {
+		code: "INVALID_JSON",
+		message: printParseErrorCode(syntaxError.error),
+		...positionAt(source, syntaxError.offset)
+	});
+	try {
+		return {
+			success: true,
+			format: "json",
+			fragment: fragmentFromUnknown(nativeJsonObjects ? JSON.parse(source) : value, { nodes: 0 }, 0),
+			diagnostic: null
+		};
+	} catch (error) {
+		if (error instanceof ParseLimitError) return failure("json", error.diagnostic);
+		return failure("json", {
+			code: nativeJsonObjects && error instanceof SyntaxError ? "INVALID_JSON" : "INVALID_JSON_VALUE",
+			message: formatErrorMessage(error),
+			line: 0,
+			column: 0
+		});
+	}
+}
+function parseYaml(source) {
+	const lineCounter = new LineCounter();
+	const document = parseDocument(source, {
+		lineCounter,
+		prettyErrors: false,
+		schema: "core",
+		uniqueKeys: true
+	});
+	const error = document.errors[0];
+	if (error !== void 0) {
+		const offset = error.pos[0];
+		return failure("yaml", {
+			code: error.code,
+			message: error.message,
+			...yamlPosition(lineCounter, offset)
+		});
+	}
+	const warning = document.warnings[0];
+	if (warning !== void 0) return failure("yaml", {
+		code: warning.code,
+		message: warning.message,
+		...yamlPosition(lineCounter, warning.pos[0])
+	});
+	try {
+		return {
+			success: true,
+			format: "yaml",
+			fragment: fragmentFromYamlNode(document.contents, { nodes: 0 }, 0, lineCounter),
+			diagnostic: null
+		};
+	} catch (caught) {
+		if (caught instanceof ParseLimitError) return failure("yaml", caught.diagnostic);
+		return failure("yaml", {
+			code: "INVALID_YAML_VALUE",
+			message: formatErrorMessage(caught),
+			line: 0,
+			column: 0
+		});
+	}
+}
+function fragmentFromUnknown(value, budget, depth) {
+	consumeBudget(budget, depth);
+	if (value === null || typeof value === "string" || typeof value === "boolean") return {
+		kind: "scalar",
+		value
+	};
+	if (typeof value === "number" && Number.isFinite(value)) return {
+		kind: "scalar",
+		value
+	};
+	if (Array.isArray(value)) return {
+		kind: "sequence",
+		items: value.map((item) => fragmentFromUnknown(item, budget, depth + 1))
+	};
+	if (typeof value === "object") return {
+		kind: "map",
+		entries: Object.entries(value).map(([key, item]) => ({
+			kind: "pair",
+			key,
+			value: fragmentFromUnknown(item, budget, depth + 1)
+		}))
+	};
+	throw new TypeError("Parsed data contains an unsupported value.");
+}
+function fragmentFromYamlNode(node, budget, depth, lineCounter) {
+	consumeBudget(budget, depth, nodePosition(node, lineCounter));
+	if (node === null) return nullValue();
+	if (isAlias(node)) throw new ParseLimitError({
+		code: "YAML_ALIAS_NOT_ALLOWED",
+		message: `YAML aliases are disabled (maximum ${PARSE_LIMITS$1.maxAliases}).`,
+		...nodePosition(node, lineCounter)
+	});
+	if (isScalar(node)) {
+		const value = node.value;
+		if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number" && Number.isFinite(value)) return {
+			kind: "scalar",
+			value
+		};
+		throw new TypeError("Parsed YAML contains an unsupported scalar value.");
+	}
+	if (isSeq(node)) return {
+		kind: "sequence",
+		items: node.items.map((item) => fragmentFromYamlNode(item, budget, depth + 1, lineCounter))
+	};
+	if (isMap(node)) return {
+		kind: "map",
+		entries: node.items.map((item) => yamlPairToFragment(item, budget, depth, lineCounter))
+	};
+	throw new TypeError("Parsed YAML contains an unsupported node type.");
+}
+function yamlPairToFragment(item, budget, depth, lineCounter) {
+	if (!isScalar(item.key) || typeof item.key.value !== "string") throw new ParseLimitError({
+		code: "YAML_NON_STRING_KEY",
+		message: "YAML map keys must be strings.",
+		...nodePosition(item.key, lineCounter)
+	});
+	return {
+		kind: "pair",
+		key: item.key.value,
+		value: fragmentFromYamlNode(item.value, budget, depth + 1, lineCounter)
+	};
+}
+function consumeBudget(budget, depth, position = {
+	line: 0,
+	column: 0
+}) {
+	if (budget.limited !== false && depth > PARSE_LIMITS$1.maxDepth) throw new ParseLimitError({
+		code: "MAX_DEPTH_EXCEEDED",
+		message: `Parsed data exceeds the maximum nesting depth of ${PARSE_LIMITS$1.maxDepth}.`,
+		...position
+	});
+	budget.nodes += 1;
+	if (budget.limited !== false && budget.nodes > PARSE_LIMITS$1.maxNodes) throw new ParseLimitError({
+		code: "MAX_NODES_EXCEEDED",
+		message: `Parsed data exceeds the maximum node count of ${PARSE_LIMITS$1.maxNodes}.`,
+		...position
+	});
+}
+function validateInputSize(source) {
+	const bytes = new TextEncoder().encode(source).byteLength;
+	if (bytes <= PARSE_LIMITS$1.maxInputBytes) return null;
+	return {
+		code: "MAX_INPUT_BYTES_EXCEEDED",
+		message: `Input is ${bytes} bytes; the maximum is ${PARSE_LIMITS$1.maxInputBytes} bytes.`,
+		line: 0,
+		column: 0
+	};
+}
+function resolveFormat(source, format) {
+	if (format === "json" || format === "yaml") return format;
+	const errors = [];
+	parse$1(source, errors, {
+		allowEmptyContent: false,
+		allowTrailingComma: false,
+		disallowComments: true
+	});
+	return errors.length === 0 ? "json" : "yaml";
+}
+function failure(format, diagnostic) {
+	return {
+		success: false,
+		format,
+		fragment: null,
+		diagnostic
+	};
+}
+function positionAt(source, offset) {
+	const lines = source.slice(0, Math.max(0, offset)).split("\n");
+	return {
+		line: lines.length,
+		column: (lines.at(-1)?.length ?? 0) + 1
+	};
+}
+function nodePosition(node, lineCounter) {
+	if (typeof node !== "object" || node === null || !("range" in node)) return {
+		line: 0,
+		column: 0
+	};
+	const range = node.range;
+	const offset = Array.isArray(range) && typeof range[0] === "number" ? range[0] : void 0;
+	return offset === void 0 ? {
+		line: 0,
+		column: 0
+	} : yamlPosition(lineCounter, offset);
+}
+function yamlPosition(lineCounter, offset) {
+	const { line, col } = lineCounter.linePos(offset);
+	return {
+		line,
+		column: col
+	};
+}
+var ParseLimitError = class extends Error {
+	constructor(diagnostic) {
+		super(diagnostic.message);
+		this.diagnostic = diagnostic;
+		this.name = "ParseLimitError";
+	}
+};
+function isPlainObject(value) {
+	return typeof value === "object" && value !== null && !isDataArray(value);
+}
+function isDataArray(value) {
+	return Array.isArray(value);
+}
+function spaces(count) {
+	return " ".repeat(count);
+}
+function compareKeyCodePoints(left, right) {
+	const a = Array.from(left), b = Array.from(right);
+	for (let i = 0; i < Math.min(a.length, b.length); i++) {
+		const difference = a[i].codePointAt(0) - b[i].codePointAt(0);
+		if (difference) return difference;
+	}
+	return a.length - b.length;
+}
+/** Parse through the existing bounded fragment parser; source text remains the owner's data. */
+function parseValue(source, format = "auto") {
+	const parsed = parseData(source, format, { jsonObjects: "json" });
+	return parsed.success ? {
+		success: true,
+		format: parsed.format,
+		value: toValue(parsed.fragment),
+		diagnostic: null
+	} : {
+		success: false,
+		format: parsed.format,
+		value: null,
+		diagnostic: parsed.diagnostic
+	};
+}
+/** Serialization is explicit and never replaces a document's preserved source implicitly. */
+function serializeValue(value, policy) {
+	if (!policy || !["json", "yaml"].includes(policy.format) || !["preserve", "unicode"].includes(policy.keyOrder)) throw new TypeError("An explicit format and key ordering policy are required.");
+	if (policy.indent !== void 0 && (!Number.isInteger(policy.indent) || policy.indent < 0 || policy.indent > 10)) throw new TypeError("JSON indentation must be an integer from 0 to 10.");
+	const ordered = toValue(fromValue(value, { enforceLimits: policy.enforceValueLimits ?? true }));
+	return (policy.format === "json" ? stringify(ordered, policy.indent ?? 2, policy.keyOrder) : renderYaml(fromValue(ordered, { enforceLimits: policy.enforceValueLimits ?? true }), policy.keyOrder)) + (policy.trailingNewline ?? policy.format === "json" ? "\n" : "");
+}
+function compare(left, right) {
+	const a = Array.from(left), b = Array.from(right);
+	for (let i = 0; i < Math.min(a.length, b.length); i++) {
+		const difference = a[i].codePointAt(0) - b[i].codePointAt(0);
+		if (difference) return difference;
+	}
+	return a.length - b.length;
+}
+function stringify(value, indent, ordering, level = 0) {
+	const pretty = indent > 0;
+	const padding = (depth) => " ".repeat(indent * depth);
+	const render = (item) => stringify(item, indent, ordering, level + 1);
+	if (Array.isArray(value)) {
+		const entries = value.map(render);
+		return entries.length ? "[" + (pretty ? "\n" + padding(level + 1) : "") + entries.join(pretty ? ",\n" + padding(level + 1) : ",") + (pretty ? "\n" + padding(level) : "") + "]" : "[]";
+	}
+	if (value !== null && typeof value === "object") {
+		const keys = Object.keys(value);
+		if (ordering === "unicode") keys.sort(compare);
+		const entries = keys.map((key) => JSON.stringify(key) + (pretty ? ": " : ":") + render(value[key]));
+		return entries.length ? "{" + (pretty ? "\n" + padding(level + 1) : "") + entries.join(pretty ? ",\n" + padding(level + 1) : ",") + (pretty ? "\n" + padding(level) : "") + "}" : "{}";
+	}
+	return JSON.stringify(value);
+}
 var StructuredDataError = class extends Error {
 	constructor(code, message, details = {}) {
 		super(`${code}: ${message}`);
@@ -6108,119 +6932,689 @@ function indexOutOfRange() {
 	throw new StructuredDataError("INDEX_OUT_OF_RANGE", "Array index is out of range.");
 }
 var PARSE_LIMITS = {
-	maxInputBytes: 262144,
-	maxDepth: 64,
-	maxNodes: 5e4
+	maxInputBytes: PARSE_LIMITS$1.maxInputBytes,
+	maxDepth: PARSE_LIMITS$1.maxDepth,
+	maxNodes: PARSE_LIMITS$1.maxNodes
 };
-var SIMPLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/u;
+function parse(source, format) {
+	const parsed = parseValue(source, format);
+	if (parsed.success) return parsed.value;
+	const diagnostic = parsed.diagnostic;
+	if (diagnostic.code === "MAX_INPUT_BYTES_EXCEEDED") throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Input is ${new TextEncoder().encode(source).byteLength} bytes; maximum is ${PARSE_LIMITS.maxInputBytes}.`);
+	if (diagnostic.code === "MAX_DEPTH_EXCEEDED") throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum nesting depth ${PARSE_LIMITS.maxDepth}.`);
+	if (diagnostic.code === "MAX_NODES_EXCEEDED") throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum node count ${PARSE_LIMITS.maxNodes}.`);
+	if (format === "json") throw new StructuredDataError("INVALID_JSON", diagnostic.code === "INVALID_JSON_VALUE" ? "JSON contains an unsupported value." : "Input must be valid JSON.");
+	const ownerMessage = {
+		YAML_ALIAS_NOT_ALLOWED: "YAML aliases are not allowed.",
+		YAML_NON_STRING_KEY: "YAML map keys must be strings."
+	};
+	if (ownerMessage[diagnostic.code]) throw new StructuredDataError("INVALID_YAML", ownerMessage[diagnostic.code]);
+	if (diagnostic.code === "INVALID_YAML_VALUE") throw new StructuredDataError("INVALID_YAML", diagnostic.message.replace(/^Parsed YAML/, "YAML"));
+	throw new StructuredDataError("INVALID_YAML", `${diagnostic.code} at line ${diagnostic.line}, column ${diagnostic.column}: ${diagnostic.message}`);
+}
 function parseJsonDocument(source) {
-	validateInputSize(source);
-	const value = parseJson(source);
-	validateValueBudget(value, { nodes: 0 }, 0);
-	return value;
+	return parse(source, "json");
 }
 function parseYamlDocument(source) {
-	validateInputSize(source);
-	const lineCounter = new LineCounter();
-	const document = parseDocument(source, {
-		lineCounter,
-		prettyErrors: false,
-		schema: "core",
-		uniqueKeys: true
-	});
-	const problem = document.errors[0] ?? document.warnings[0];
-	if (problem) {
-		const { line, column } = yamlPosition(lineCounter, problem.pos[0]);
-		throw new StructuredDataError("INVALID_YAML", `${problem.code} at line ${line}, column ${column}: ${problem.message}`);
-	}
-	try {
-		return valueFromYamlNode(document.contents, { nodes: 0 }, 0, lineCounter);
-	} catch (error) {
-		if (error instanceof StructuredDataError) throw error;
-		throw new StructuredDataError("INVALID_YAML", error instanceof Error ? error.message : String(error));
-	}
+	return parse(source, "yaml");
 }
 function renderJsonDocument(value) {
-	return stringifyJson(value);
+	return serializeValue(value, {
+		format: "json",
+		keyOrder: "unicode",
+		indent: 0,
+		trailingNewline: false,
+		enforceValueLimits: false
+	});
 }
 function renderYamlDocument(value) {
-	return renderYamlValue(value, 0);
+	return serializeValue(value, {
+		format: "yaml",
+		keyOrder: "unicode",
+		trailingNewline: false,
+		enforceValueLimits: false
+	});
 }
-function valueFromYamlNode(node, budget, depth, lineCounter) {
-	consumeBudget(budget, depth);
-	if (node === null) return null;
-	if (isAlias(node)) throw new StructuredDataError("INVALID_YAML", "YAML aliases are not allowed.");
-	if (isScalar(node)) {
-		const value = node.value;
-		if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number" && Number.isFinite(value)) return value;
-		throw new StructuredDataError("INVALID_YAML", "YAML contains an unsupported scalar value.");
+/**
+* A small JSON Schema validator for function arguments and returns. It interprets the schema at run time and
+* never generates code, so it also works where `eval` is unavailable (for example Cloudflare Workers).
+*
+* Supported keywords: type, properties, required, additionalProperties (boolean), items, enum,
+* const, minimum, maximum, minLength, maxLength, minItems, maxItems. Other keywords, such as
+* description and title, are ignored.
+*/
+function validateAgainstSchema(value, schema, path = "$") {
+	const rule = asRecord(schema);
+	if (!rule) throw new Error(`${path} must be a JSON Schema object`);
+	assertSchemaNode(rule, path);
+	return validateValue(value, rule, path);
+}
+/** Reject malformed schemas before a function definition or call can use them. */
+function validateSchemaDefinition(schema, label = "schema") {
+	const rule = asRecord(schema);
+	if (!rule) throw new Error(`${label} must be a JSON object`);
+	assertSchemaNode(rule, label);
+}
+function validateValue(value, rule, path) {
+	const errors = [];
+	if (rule.type !== void 0) {
+		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
+		if (!types.some((type) => matchesType(value, type))) return [`${path} must be ${types.join(" or ")}`];
 	}
-	if (isSeq(node)) return node.items.map((item) => valueFromYamlNode(item, budget, depth + 1, lineCounter));
-	if (isMap(node)) return Object.fromEntries(node.items.map((item) => yamlPairToEntry(item, budget, depth, lineCounter)));
-	throw new StructuredDataError("INVALID_YAML", "YAML contains an unsupported node type.");
-}
-function yamlPairToEntry(pair, budget, depth, lineCounter) {
-	if (!isScalar(pair.key) || typeof pair.key.value !== "string") throw new StructuredDataError("INVALID_YAML", "YAML map keys must be strings.");
-	return [pair.key.value, valueFromYamlNode(pair.value, budget, depth + 1, lineCounter)];
-}
-function validateValueBudget(value, budget, depth) {
-	consumeBudget(budget, depth);
-	if (Array.isArray(value)) for (const item of value) validateValueBudget(item, budget, depth + 1);
-	else if (typeof value === "object" && value !== null) for (const item of Object.values(value)) validateValueBudget(item, budget, depth + 1);
-}
-function consumeBudget(budget, depth) {
-	if (depth > PARSE_LIMITS.maxDepth) throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum nesting depth ${PARSE_LIMITS.maxDepth}.`);
-	budget.nodes += 1;
-	if (budget.nodes > PARSE_LIMITS.maxNodes) throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum node count ${PARSE_LIMITS.maxNodes}.`);
-}
-function validateInputSize(source) {
-	const bytes = new TextEncoder().encode(source).byteLength;
-	if (bytes > PARSE_LIMITS.maxInputBytes) throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Input is ${bytes} bytes; maximum is ${PARSE_LIMITS.maxInputBytes}.`);
-}
-function renderYamlValue(value, indent) {
-	if (isObject(value)) {
-		const entries = Object.keys(value).sort(compareUnicodeCodePoints);
-		if (entries.length === 0) return `${spaces(indent)}{}`;
-		return entries.map((key) => renderValuePair(key, value[key], indent)).join("\n");
+	if (Array.isArray(rule.enum) && !rule.enum.some((candidate) => deepEqual(candidate, value))) errors.push(`${path} must be one of ${rule.enum.map((item) => JSON.stringify(item)).join(", ")}`);
+	if ("const" in rule && !deepEqual(rule.const, value)) errors.push(`${path} must be ${JSON.stringify(rule.const)}`);
+	if (typeof value === "number") {
+		if (typeof rule.minimum === "number" && value < rule.minimum) errors.push(`${path} must be >= ${rule.minimum}`);
+		if (typeof rule.maximum === "number" && value > rule.maximum) errors.push(`${path} must be <= ${rule.maximum}`);
+	}
+	if (typeof value === "string") {
+		const length = [...value].length;
+		if (typeof rule.minLength === "number" && length < rule.minLength) errors.push(`${path} must have at least ${rule.minLength} characters`);
+		if (typeof rule.maxLength === "number" && length > rule.maxLength) errors.push(`${path} must have at most ${rule.maxLength} characters`);
 	}
 	if (Array.isArray(value)) {
-		if (value.length === 0) return `${spaces(indent)}[]`;
-		return value.map((item) => renderSequenceItem(item, indent)).join("\n");
+		if (typeof rule.minItems === "number" && value.length < rule.minItems) errors.push(`${path} must have at least ${rule.minItems} items`);
+		if (typeof rule.maxItems === "number" && value.length > rule.maxItems) errors.push(`${path} must have at most ${rule.maxItems} items`);
+		if (rule.items !== void 0) value.forEach((item, index) => errors.push(...validateValue(item, rule.items, `${path}[${index}]`)));
 	}
-	return `${spaces(indent)}${renderScalar(value)}`;
+	const object = asRecord(value);
+	if (object) {
+		const properties = asRecord(rule.properties) ?? {};
+		if (Array.isArray(rule.required)) {
+			for (const name of rule.required) if (typeof name === "string" && !Object.hasOwn(object, name)) errors.push(`${path}.${name} is required`);
+		}
+		for (const [name, child] of Object.entries(object)) if (Object.hasOwn(properties, name)) errors.push(...validateValue(child, properties[name], `${path}.${name}`));
+		else if (rule.additionalProperties === false) errors.push(`${path}.${name} is not allowed`);
+	}
+	return errors;
 }
-function renderValuePair(key, value, indent) {
-	const prefix = `${spaces(indent)}${renderKey(key)}:`;
-	if (!isObject(value) && !Array.isArray(value)) return `${prefix} ${renderScalar(value)}`;
-	return `${prefix}\n${renderYamlValue(value, indent + 2)}`;
+function assertSchemaNode(rule, path) {
+	const validTypes = /* @__PURE__ */ new Set([
+		"object",
+		"array",
+		"string",
+		"number",
+		"integer",
+		"boolean",
+		"null"
+	]);
+	if (rule.type !== void 0) {
+		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
+		if (types.length === 0 || types.some((type) => typeof type !== "string" || !validTypes.has(type))) throw new Error(`${path}.type must be a supported JSON Schema type or non-empty type array`);
+	}
+	if (rule.properties !== void 0) {
+		const properties = asRecord(rule.properties);
+		if (!properties) throw new Error(`${path}.properties must be an object`);
+		for (const [name, child] of Object.entries(properties)) {
+			const childRule = asRecord(child);
+			if (!childRule) throw new Error(`${path}.properties.${name} must be a JSON Schema object`);
+			assertSchemaNode(childRule, `${path}.properties.${name}`);
+		}
+	}
+	if (rule.required !== void 0 && (!Array.isArray(rule.required) || rule.required.some((name) => typeof name !== "string"))) throw new Error(`${path}.required must be an array of strings`);
+	if (rule.additionalProperties !== void 0 && typeof rule.additionalProperties !== "boolean") throw new Error(`${path}.additionalProperties must be a boolean`);
+	if (rule.items !== void 0) {
+		const items = asRecord(rule.items);
+		if (!items) throw new Error(`${path}.items must be a JSON Schema object`);
+		assertSchemaNode(items, `${path}.items`);
+	}
+	if (rule.enum !== void 0 && (!Array.isArray(rule.enum) || rule.enum.length === 0)) throw new Error(`${path}.enum must be a non-empty array`);
+	for (const keyword of ["minimum", "maximum"]) if (rule[keyword] !== void 0 && (typeof rule[keyword] !== "number" || !Number.isFinite(rule[keyword]))) throw new Error(`${path}.${keyword} must be a finite number`);
+	for (const keyword of [
+		"minLength",
+		"maxLength",
+		"minItems",
+		"maxItems"
+	]) {
+		const value = rule[keyword];
+		if (value !== void 0 && (typeof value !== "number" || !Number.isInteger(value) || value < 0)) throw new Error(`${path}.${keyword} must be a non-negative integer`);
+	}
+	if (typeof rule.minimum === "number" && typeof rule.maximum === "number" && rule.minimum > rule.maximum) throw new Error(`${path}.minimum cannot exceed maximum`);
+	if (typeof rule.minLength === "number" && typeof rule.maxLength === "number" && rule.minLength > rule.maxLength) throw new Error(`${path}.minLength cannot exceed maxLength`);
+	if (typeof rule.minItems === "number" && typeof rule.maxItems === "number" && rule.minItems > rule.maxItems) throw new Error(`${path}.minItems cannot exceed maxItems`);
 }
-function renderSequenceItem(value, indent) {
-	const prefix = `${spaces(indent)}-`;
-	if (!isObject(value) && !Array.isArray(value)) return `${prefix} ${renderScalar(value)}`;
-	return `${prefix}\n${renderYamlValue(value, indent + 2)}`;
+function matchesType(value, type) {
+	switch (type) {
+		case "object": return asRecord(value) !== null;
+		case "array": return Array.isArray(value);
+		case "string": return typeof value === "string";
+		case "number": return typeof value === "number" && Number.isFinite(value);
+		case "integer": return typeof value === "number" && Number.isInteger(value);
+		case "boolean": return typeof value === "boolean";
+		case "null": return value === null;
+		default: return false;
+	}
 }
-function renderKey(key) {
-	return SIMPLE_KEY_PATTERN.test(key) ? key : JSON.stringify(key);
+function deepEqual(left, right) {
+	return JSON.stringify(left) === JSON.stringify(right);
 }
-function renderScalar(value) {
-	if (value === null) return "null";
-	if (typeof value === "boolean") return value ? "true" : "false";
-	if (typeof value === "number") return String(value);
-	return JSON.stringify(value);
+function asRecord(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
 }
-function isObject(value) {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+var SCHEMA_PROPERTY_TYPES = [
+	"object",
+	"array",
+	"string",
+	"number",
+	"integer",
+	"boolean",
+	"null"
+];
+var SCHEMA_ID_PATTERN = /^[a-z][a-z0-9.-]{0,127}$/u;
+/** Complete Semantic Version, matching the named-data schemaRef contract. */
+var SCHEMA_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*))*))?(?:\+([\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*))?$/u;
+function schemaKey(reference) {
+	return `${reference.id}@${reference.version}`;
 }
-function yamlPosition(counter, offset) {
-	const position = counter.linePos(offset);
+function parseSchemaReference(rawId, rawVersion) {
+	const id = String(rawId).trim();
+	const version = String(rawVersion).trim();
+	if (!SCHEMA_ID_PATTERN.test(id)) throw new StructuredDataError("INVALID_SCHEMA", `Schema id must match ${SCHEMA_ID_PATTERN.source}: ${id}`, { schemaId: id });
+	if (!SCHEMA_VERSION_PATTERN.test(version)) throw new StructuredDataError("INVALID_SCHEMA", `Schema version must be a complete Semantic Version: ${version}`, {
+		schemaId: id,
+		schemaVersion: version
+	});
 	return {
-		line: position.line,
-		column: position.col
+		id,
+		version
 	};
 }
-function spaces(count) {
-	return " ".repeat(count);
+/** Reads a Schema document from JSON text and refuses malformed schemas before they are stored. */
+function parseSchemaDocument(text, reference) {
+	let document;
+	try {
+		document = parseJson(text);
+	} catch {
+		throw new StructuredDataError("INVALID_SCHEMA", "Schema must be valid JSON.", {
+			schemaId: reference.id,
+			schemaVersion: reference.version
+		});
+	}
+	return assertSchemaDocument(document, reference);
 }
+function assertSchemaDocument(document, reference) {
+	try {
+		validateSchemaDefinition(document, "schema");
+	} catch (error) {
+		throw new StructuredDataError("INVALID_SCHEMA", error instanceof Error ? error.message : String(error), {
+			schemaId: reference.id,
+			schemaVersion: reference.version
+		});
+	}
+	return document;
+}
+function schemaEntry(reference, document) {
+	return {
+		reference,
+		canonical: stringifyJson(document),
+		document
+	};
+}
+/**
+* Checks a whole candidate value and reports the first failure with the schema identity, the data
+* name, the failing path and the expectation. Callers validate the complete candidate before they
+* replace a binding, so a rejected update leaves the previous value in place.
+*/
+function assertValueMatchesSchema(value, entry, dataName) {
+	const [first] = validateAgainstSchema(value, entry.document);
+	if (first === void 0) return;
+	const { path, expected } = splitDiagnostic(first);
+	throw new StructuredDataError("SCHEMA_VALIDATION_FAILED", `Structured data ${dataName} does not match schema ${schemaKey(entry.reference)}: ${first}`, {
+		dataName,
+		schemaId: entry.reference.id,
+		schemaVersion: entry.reference.version,
+		path,
+		expected
+	});
+}
+function beginSchemaDraft(reference, additionalProperties) {
+	return {
+		reference,
+		additionalProperties,
+		properties: /* @__PURE__ */ new Map(),
+		required: /* @__PURE__ */ new Set()
+	};
+}
+function addDraftProperty(draft, rawProperty, rawType, required) {
+	const property = String(rawProperty).trim();
+	if (property.length === 0) throw new StructuredDataError("INVALID_SCHEMA", "Property name cannot be empty.", {
+		schemaId: draft.reference.id,
+		schemaVersion: draft.reference.version
+	});
+	const type = String(rawType).trim();
+	if (!SCHEMA_PROPERTY_TYPES.includes(type)) throw new StructuredDataError("INVALID_SCHEMA", `Property type must be one of ${SCHEMA_PROPERTY_TYPES.join(", ")}: ${type}`, {
+		schemaId: draft.reference.id,
+		schemaVersion: draft.reference.version,
+		path: `$.${property}`,
+		expected: SCHEMA_PROPERTY_TYPES.join(" or ")
+	});
+	draft.properties.set(property, type);
+	if (required) draft.required.add(property);
+	else draft.required.delete(property);
+}
+/**
+* Converts a draft to the same canonical document a text definition of the same shape produces.
+* Property order never matters: object keys are canonicalized and `required` is sorted.
+*/
+function draftToSchemaDocument(draft) {
+	const properties = {};
+	for (const [property, type] of draft.properties) properties[property] = { type };
+	const document = {
+		type: "object",
+		properties,
+		additionalProperties: draft.additionalProperties
+	};
+	if (draft.required.size > 0) document.required = [...draft.required].sort();
+	return document;
+}
+function parseAdditionalProperties(raw, reference) {
+	const value = String(raw).trim();
+	if (value === "allow") return true;
+	if (value === "reject") return false;
+	throw new StructuredDataError("INVALID_SCHEMA", `Extra properties must be allow or reject: ${value}`, {
+		schemaId: reference.id,
+		schemaVersion: reference.version,
+		expected: "allow or reject"
+	});
+}
+function parseRequiredFlag(raw, reference) {
+	const value = String(raw).trim();
+	if (value === "required") return true;
+	if (value === "optional") return false;
+	throw new StructuredDataError("INVALID_SCHEMA", `Property requirement must be required or optional: ${value}`, {
+		schemaId: reference.id,
+		schemaVersion: reference.version,
+		expected: "required or optional"
+	});
+}
+var DIAGNOSTIC_PREDICATES = [
+	" must be ",
+	" must have ",
+	" is required",
+	" is not allowed"
+];
+/**
+* Splits a shared-validator diagnostic into its path and expectation. The message text itself is
+* kept verbatim so a failure reads the same here as it does for a named function argument.
+*/
+function splitDiagnostic(message) {
+	const boundary = DIAGNOSTIC_PREDICATES.map((predicate) => message.indexOf(predicate)).filter((index) => index >= 0).sort((left, right) => left - right)[0];
+	if (boundary === void 0) return {
+		path: "$",
+		expected: message
+	};
+	return {
+		path: message.slice(0, boundary),
+		expected: message.slice(boundary + 1).replace(/^(?:must be|must have|is) /u, "")
+	};
+}
+/** An explicit one-way projection. It never prepares, commits or serializes source documents. */
+function createDocumentSourceProjection({ documents, runtime, publish }) {
+	let values = /* @__PURE__ */ new WeakMap();
+	let disposed = false;
+	let generation = 0;
+	const clear = () => {
+		values = /* @__PURE__ */ new WeakMap();
+		generation++;
+	};
+	const stop = () => clear();
+	const close = () => {
+		if (disposed) return;
+		disposed = true;
+		clear();
+		runtime?.off?.("PROJECT_STOP_ALL", stop);
+		runtime?.off?.("RUNTIME_DISPOSED", stop);
+		runtime?.off?.("PROJECT_LOADED", stop);
+	};
+	runtime?.on("PROJECT_STOP_ALL", stop);
+	runtime?.on("RUNTIME_DISPOSED", stop);
+	runtime?.on("PROJECT_LOADED", stop);
+	return Object.freeze({
+		project(target, name, reference) {
+			if (disposed) throw new StructuredDataError("DATA_NOT_FOUND", "The source projection session has ended.");
+			if (target === null || typeof target !== "object" && typeof target !== "function") throw new StructuredDataError("TYPE_MISMATCH", "A runtime target is required.");
+			if (typeof name !== "string" || !name.trim()) throw new StructuredDataError("INVALID_NAME", "Structured data name cannot be empty.");
+			const identity = Object.freeze({ ...reference });
+			const metadata = documents.list().find((item) => item.reference.providerId === identity.providerId && item.reference.documentId === identity.documentId);
+			if (!metadata) throw new StructuredDataError("DATA_NOT_FOUND", "The source document does not exist.");
+			const format = metadata.format;
+			if (format !== "json" && format !== "yaml") throw new StructuredDataError("TYPE_MISMATCH", "A source document must declare JSON or YAML format.");
+			const current = generation;
+			const adapter = documents.open(identity);
+			let value;
+			try {
+				const captured = adapter.capture();
+				value = format === "json" ? parseJsonDocument(captured.source) : parseYamlDocument(captured.source);
+			} finally {
+				adapter.dispose();
+			}
+			if (disposed || current !== generation) throw new StructuredDataError("DATA_NOT_FOUND", "The runtime session changed during source projection.");
+			const candidate = freeze({
+				reference: identity,
+				filename: metadata.filename,
+				format,
+				value: cloneJson(value)
+			});
+			publish?.(target, name.trim(), cloneJson(value), format);
+			let bindings = values.get(target);
+			if (!bindings) {
+				bindings = /* @__PURE__ */ new Map();
+				values.set(target, bindings);
+			}
+			bindings.set(name.trim(), candidate);
+			return candidate;
+		},
+		get(target, name) {
+			return values.get(target)?.get(name.trim());
+		},
+		clearTarget(target) {
+			values.delete(target);
+			generation++;
+		},
+		clear,
+		dispose: close
+	});
+}
+function freeze(value) {
+	if (value && typeof value === "object" && !Object.isFrozen(value)) {
+		for (const child of Object.values(value)) freeze(child);
+		Object.freeze(value);
+	}
+	return value;
+}
+/** The legacy runtime subset is identified explicitly; this is not a full JSON Schema engine. */
+function createReadonlySchemaResolver(lookup) {
+	const resolve = (reference) => {
+		const exact = parseSchemaReference(reference.id, reference.version);
+		const entry = lookup(exact);
+		if (!entry || entry.reference.id !== exact.id || entry.reference.version !== exact.version) throw new StructuredDataError("SCHEMA_NOT_FOUND", `Schema does not exist: ${schemaKey(exact)}`, {
+			schemaId: exact.id,
+			schemaVersion: exact.version
+		});
+		return freeze(JSON.parse(JSON.stringify(entry)));
+	};
+	return Object.freeze({
+		profile: "structured-subset",
+		resolve,
+		inline(reference) {
+			const entry = resolve(reference);
+			return Object.freeze({
+				profile: "structured-subset",
+				reference: entry.reference,
+				document: entry.document
+			});
+		}
+	});
+}
+var numberToken = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/u;
+var invalidNumber = Object.freeze({
+	kind: "invalid",
+	code: "fixed-number-input-invalid"
+});
+/**
+* Parse a NEW numeric draft according to NP-finite-new-input-v1.
+* Never apply this to opening/no-op raw values or use it as an owner validator.
+* Keep the validated token so negative zero, precision and exponent spelling survive.
+*/
+function parseFixedNumberInput(input) {
+	if (typeof input === "number") {
+		if (!Number.isFinite(input)) return invalidNumber;
+		return Object.freeze({
+			kind: "valid",
+			token: Object.is(input, -0) ? "-0" : String(input),
+			value: input
+		});
+	}
+	if (typeof input !== "string") return invalidNumber;
+	const token = input.trim();
+	if (!numberToken.test(token)) return invalidNumber;
+	const value = Number(token);
+	return Number.isFinite(value) ? Object.freeze({
+		kind: "valid",
+		token,
+		value
+	}) : invalidNumber;
+}
+var block_editor_fixed_inputs_schema_default = {
+	$schema: "https://json-schema.org/draft/2020-12/schema",
+	$id: "https://kubohiroya.github.io/turbowarp-structured-data/schemas/block-editor-fixed-inputs.schema.json",
+	$defs: { "forEachAtPath": {
+		"type": "object",
+		"properties": { "MAX": {
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 1e3
+		} },
+		"required": ["MAX"],
+		"additionalProperties": true
+	} }
+};
+var source$1 = {
+	repository: "turbowarp-structured-data",
+	path: "schemas/block-editor-fixed-inputs.schema.json",
+	symbol: "#/$defs/forEachAtPath/properties/MAX"
+};
+/** The on-disk owner Schema is canonical; this is its single-field projection. */
+var fixedInputSchemaBundle = {
+	identity: {
+		ownerId: "turbowarp-structured-data",
+		contractId: "forEachAtPath.MAX",
+		revision: "fixed-inputs-v1",
+		variantId: "default"
+	},
+	dialect: "2020-12",
+	root: {
+		retrievalUri: "https://kubohiroya.github.io/turbowarp-structured-data/schemas/forEachAtPath-MAX.schema.json",
+		document: block_editor_fixed_inputs_schema_default.$defs.forEachAtPath.properties.MAX,
+		artifact: {
+			role: "canonical-schema",
+			source: source$1
+		}
+	},
+	resources: [],
+	provenance: {
+		canonicalSources: [source$1, {
+			repository: "turbowarp-structured-data",
+			path: "src/core.ts",
+			symbol: "iterationEntries"
+		}],
+		generatedFiles: [{
+			repository: "turbowarp-structured-data",
+			path: "docs/schemas/block-editor-fixed-inputs.schema.json"
+		}],
+		referenceSchemas: [],
+		generationSources: [{
+			repository: "turbowarp-structured-data",
+			path: "scripts/generate-fixed-input-docs.mjs"
+		}]
+	}
+};
+var fixedInputEditorDefinitions = [{
+	apiVersion: 1,
+	extensionId: extensionConfig.id,
+	editorId: "forEachAtPath-fixed-inputs",
+	opcodes: [`${extensionConfig.id}_forEachAtPath`],
+	contractId: "turbowarp-structured-data:forEachAtPath.MAX",
+	contractRevision: "fixed-inputs-v1",
+	bindings: [{
+		argument: "MAX",
+		schemaBundle: fixedInputSchemaBundle,
+		control: {
+			kind: "number",
+			label: "MAX"
+		},
+		read(value) {
+			if (typeof value !== "string" && typeof value !== "number") throw new TypeError("Expected a literal maximum.");
+			if (typeof value === "string" && value.trim() === "") throw new TypeError("Blank maximum stays readonly.");
+			const number = Number(value);
+			if (!Number.isFinite(number)) throw new TypeError("Maximum must be finite.");
+			return number;
+		},
+		encode(value) {
+			const parsed = parseFixedNumberInput(value);
+			if (parsed.kind !== "valid") throw new TypeError("Expected a finite numeric token.");
+			return parsed.token;
+		},
+		validateCandidate(value) {
+			const parsed = parseFixedNumberInput(value);
+			return parsed.kind === "valid" && Number.isInteger(parsed.value) && parsed.value >= 1 && parsed.value <= 1e3 ? [] : [{
+				path: "/inputs/MAX",
+				message: "Maximum must be an integer from 1 to 1000."
+			}];
+		}
+	}],
+	validationContext: () => ({
+		consumerId: extensionConfig.id,
+		nowMs: Date.now(),
+		settings: null
+	})
+}];
+/** Register metadata only; the GUI startup capability owns editor activation. */
+function registerFixedInputEditors(scratch, definitions, runtimeOverride) {
+	const host = scratch;
+	const api = host.gui?.blockEditors;
+	if (!definitions.length || api?.apiVersion !== 1 || typeof api.registerFixedInputEditor !== "function") return () => {};
+	const runtime = runtimeOverride ?? host.vm?.runtime;
+	const removers = [];
+	let active = true;
+	const dispose = () => {
+		if (!active) return;
+		active = false;
+		runtime?.off?.("RUNTIME_DISPOSED", dispose);
+		for (const remove of removers.splice(0).reverse()) remove();
+	};
+	try {
+		for (const definition of definitions) {
+			const remove = api.registerFixedInputEditor.call(api, definition);
+			if (typeof remove !== "function") throw new TypeError("Invalid fixed input registration disposer.");
+			removers.push(remove);
+		}
+		runtime?.on?.("RUNTIME_DISPOSED", dispose);
+	} catch (error) {
+		dispose();
+		throw error;
+	}
+	return dispose;
+}
+function sourceBinding(argument, bundle, read, check = read, format = "json", uiSchema) {
+	return {
+		argument,
+		variants: [{
+			variantId: "default",
+			format,
+			schemaBundle: bundle,
+			...uiSchema ? { uiSchema } : {}
+		}],
+		decode(source) {
+			return {
+				source,
+				format,
+				variantId: "default",
+				data: read(source)
+			};
+		},
+		validateSource(source, context) {
+			try {
+				read(source);
+			} catch {
+				return {
+					source,
+					result: {
+						kind: "invalid",
+						diagnostics: [{ code: "source-decode-invalid" }]
+					}
+				};
+			}
+			try {
+				const descriptors = Object.getOwnPropertyDescriptors(context);
+				if (typeof descriptors.consumerId?.value !== "string" || typeof descriptors.nowMs?.value !== "number" || !Number.isFinite(descriptors.nowMs.value) || !descriptors.settings || !("value" in descriptors.settings)) return {
+					source,
+					result: {
+						kind: "execution-error",
+						diagnostics: [{ code: "owner-context-invalid" }]
+					}
+				};
+			} catch {
+				return {
+					source,
+					result: {
+						kind: "execution-error",
+						diagnostics: [{ code: "owner-context-invalid" }]
+					}
+				};
+			}
+			try {
+				check(source);
+			} catch {
+				return {
+					source,
+					result: {
+						kind: "invalid",
+						diagnostics: [{ code: "source-owner-invalid" }]
+					}
+				};
+			}
+			return {
+				source,
+				result: {
+					kind: "valid",
+					diagnostics: []
+				}
+			};
+		}
+	};
+}
+/** The optional capability keeps legacy hosts and the startup flag safely inactive. */
+function registerSourceEditors(scratch, definitions) {
+	const host = scratch;
+	const api = host.gui?.blockEditors;
+	if (api?.apiVersion !== 1 || typeof api.registerSourceEditor !== "function") return () => {};
+	const removers = [];
+	let active = true;
+	const dispose = () => {
+		if (!active) return;
+		active = false;
+		host.vm?.runtime?.off?.("RUNTIME_DISPOSED", dispose);
+		for (const remove of removers.splice(0).reverse()) remove();
+	};
+	try {
+		for (const definition of definitions) removers.push(api.registerSourceEditor.call(api, definition));
+		host.vm?.runtime?.on?.("RUNTIME_DISPOSED", dispose);
+	} catch (error) {
+		dispose();
+		throw error;
+	}
+	return dispose;
+}
+var source = {
+	repository: "https://github.com/kubohiroya/turbowarp-extension-data-editor",
+	path: "src/json-value.ts",
+	symbol: "jsonValueSchema"
+};
+var jsonValueSchemaBundle = Object.freeze({
+	identity: {
+		ownerId: "@kubohiroya/turbowarp-extension-data-editor",
+		contractId: "json-value",
+		revision: "1",
+		variantId: "json-value"
+	},
+	dialect: "2020-12",
+	root: {
+		retrievalUri: "https://kubohiroya.github.io/turbowarp-extension-data-editor/schemas/json-value",
+		document: true,
+		artifact: {
+			role: "canonical-schema",
+			source
+		}
+	},
+	resources: [],
+	provenance: {
+		canonicalSources: [source],
+		generatedFiles: [],
+		referenceSchemas: [],
+		generationSources: []
+	}
+});
 var sourceEditorDefinitions = [
 	{
 		editorId: "json-document-source",
@@ -6946,6 +8340,18 @@ var NAMED_DATA_ERROR_CODES = [
 	"NAMED_DATA_ABORTED",
 	"NAMED_DATA_PROVIDER_RELEASED"
 ];
+/** Native byte forms retained by each provider kind; this does not enable conversion. */
+var NAMED_DATA_NATIVE_REPRESENTATIONS = Object.freeze({
+	structured: Object.freeze(["json", "yaml"]),
+	document: Object.freeze([
+		"html",
+		"markdown",
+		"yaml",
+		"json"
+	]),
+	binary: Object.freeze(["raw"]),
+	asset: Object.freeze(["raw"])
+});
 var NamedDataError = class extends Error {
 	constructor(code, message, options) {
 		super(`${code}: ${message}`, options);
@@ -7218,9 +8624,7 @@ function sameSchemaRef(left, right) {
 	return left === void 0 ? right === void 0 : right !== void 0 && left.id === right.id && left.version === right.version;
 }
 function isNativeRepresentation(kind, representation) {
-	if (kind === "structured") return representation === "json" || representation === "yaml";
-	if (kind === "document") return representation === "html" || representation === "markdown";
-	return representation === "raw";
+	return NAMED_DATA_NATIVE_REPRESENTATIONS[kind].includes(representation);
 }
 function requireNamespace(namespace) {
 	if (!isNamedDataNamespace(namespace)) throw invalidReference("Invalid namespace.");
@@ -7256,279 +8660,6 @@ Object.freeze({
 	NAMED_DATA_REGISTRY_MVP: configuredFlag("NAMED_DATA_REGISTRY_MVP"),
 	NAMED_DATA_SCHEMA_REF: configuredFlag("NAMED_DATA_SCHEMA_REF")
 });
-/**
-* A small JSON Schema validator for function arguments and returns. It interprets the schema at run time and
-* never generates code, so it also works where `eval` is unavailable (for example Cloudflare Workers).
-*
-* Supported keywords: type, properties, required, additionalProperties (boolean), items, enum,
-* const, minimum, maximum, minLength, maxLength, minItems, maxItems. Other keywords, such as
-* description and title, are ignored.
-*/
-function validateAgainstSchema(value, schema, path = "$") {
-	const rule = asRecord(schema);
-	if (!rule) throw new Error(`${path} must be a JSON Schema object`);
-	assertSchemaNode(rule, path);
-	return validateValue(value, rule, path);
-}
-/** Reject malformed schemas before a function definition or call can use them. */
-function validateSchemaDefinition(schema, label = "schema") {
-	const rule = asRecord(schema);
-	if (!rule) throw new Error(`${label} must be a JSON object`);
-	assertSchemaNode(rule, label);
-}
-function validateValue(value, rule, path) {
-	const errors = [];
-	if (rule.type !== void 0) {
-		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
-		if (!types.some((type) => matchesType(value, type))) return [`${path} must be ${types.join(" or ")}`];
-	}
-	if (Array.isArray(rule.enum) && !rule.enum.some((candidate) => deepEqual(candidate, value))) errors.push(`${path} must be one of ${rule.enum.map((item) => JSON.stringify(item)).join(", ")}`);
-	if ("const" in rule && !deepEqual(rule.const, value)) errors.push(`${path} must be ${JSON.stringify(rule.const)}`);
-	if (typeof value === "number") {
-		if (typeof rule.minimum === "number" && value < rule.minimum) errors.push(`${path} must be >= ${rule.minimum}`);
-		if (typeof rule.maximum === "number" && value > rule.maximum) errors.push(`${path} must be <= ${rule.maximum}`);
-	}
-	if (typeof value === "string") {
-		const length = [...value].length;
-		if (typeof rule.minLength === "number" && length < rule.minLength) errors.push(`${path} must have at least ${rule.minLength} characters`);
-		if (typeof rule.maxLength === "number" && length > rule.maxLength) errors.push(`${path} must have at most ${rule.maxLength} characters`);
-	}
-	if (Array.isArray(value)) {
-		if (typeof rule.minItems === "number" && value.length < rule.minItems) errors.push(`${path} must have at least ${rule.minItems} items`);
-		if (typeof rule.maxItems === "number" && value.length > rule.maxItems) errors.push(`${path} must have at most ${rule.maxItems} items`);
-		if (rule.items !== void 0) value.forEach((item, index) => errors.push(...validateValue(item, rule.items, `${path}[${index}]`)));
-	}
-	const object = asRecord(value);
-	if (object) {
-		const properties = asRecord(rule.properties) ?? {};
-		if (Array.isArray(rule.required)) {
-			for (const name of rule.required) if (typeof name === "string" && !Object.hasOwn(object, name)) errors.push(`${path}.${name} is required`);
-		}
-		for (const [name, child] of Object.entries(object)) if (Object.hasOwn(properties, name)) errors.push(...validateValue(child, properties[name], `${path}.${name}`));
-		else if (rule.additionalProperties === false) errors.push(`${path}.${name} is not allowed`);
-	}
-	return errors;
-}
-function assertSchemaNode(rule, path) {
-	const validTypes = /* @__PURE__ */ new Set([
-		"object",
-		"array",
-		"string",
-		"number",
-		"integer",
-		"boolean",
-		"null"
-	]);
-	if (rule.type !== void 0) {
-		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
-		if (types.length === 0 || types.some((type) => typeof type !== "string" || !validTypes.has(type))) throw new Error(`${path}.type must be a supported JSON Schema type or non-empty type array`);
-	}
-	if (rule.properties !== void 0) {
-		const properties = asRecord(rule.properties);
-		if (!properties) throw new Error(`${path}.properties must be an object`);
-		for (const [name, child] of Object.entries(properties)) {
-			const childRule = asRecord(child);
-			if (!childRule) throw new Error(`${path}.properties.${name} must be a JSON Schema object`);
-			assertSchemaNode(childRule, `${path}.properties.${name}`);
-		}
-	}
-	if (rule.required !== void 0 && (!Array.isArray(rule.required) || rule.required.some((name) => typeof name !== "string"))) throw new Error(`${path}.required must be an array of strings`);
-	if (rule.additionalProperties !== void 0 && typeof rule.additionalProperties !== "boolean") throw new Error(`${path}.additionalProperties must be a boolean`);
-	if (rule.items !== void 0) {
-		const items = asRecord(rule.items);
-		if (!items) throw new Error(`${path}.items must be a JSON Schema object`);
-		assertSchemaNode(items, `${path}.items`);
-	}
-	if (rule.enum !== void 0 && (!Array.isArray(rule.enum) || rule.enum.length === 0)) throw new Error(`${path}.enum must be a non-empty array`);
-	for (const keyword of ["minimum", "maximum"]) if (rule[keyword] !== void 0 && (typeof rule[keyword] !== "number" || !Number.isFinite(rule[keyword]))) throw new Error(`${path}.${keyword} must be a finite number`);
-	for (const keyword of [
-		"minLength",
-		"maxLength",
-		"minItems",
-		"maxItems"
-	]) {
-		const value = rule[keyword];
-		if (value !== void 0 && (typeof value !== "number" || !Number.isInteger(value) || value < 0)) throw new Error(`${path}.${keyword} must be a non-negative integer`);
-	}
-	if (typeof rule.minimum === "number" && typeof rule.maximum === "number" && rule.minimum > rule.maximum) throw new Error(`${path}.minimum cannot exceed maximum`);
-	if (typeof rule.minLength === "number" && typeof rule.maxLength === "number" && rule.minLength > rule.maxLength) throw new Error(`${path}.minLength cannot exceed maxLength`);
-	if (typeof rule.minItems === "number" && typeof rule.maxItems === "number" && rule.minItems > rule.maxItems) throw new Error(`${path}.minItems cannot exceed maxItems`);
-}
-function matchesType(value, type) {
-	switch (type) {
-		case "object": return asRecord(value) !== null;
-		case "array": return Array.isArray(value);
-		case "string": return typeof value === "string";
-		case "number": return typeof value === "number" && Number.isFinite(value);
-		case "integer": return typeof value === "number" && Number.isInteger(value);
-		case "boolean": return typeof value === "boolean";
-		case "null": return value === null;
-		default: return false;
-	}
-}
-function deepEqual(left, right) {
-	return JSON.stringify(left) === JSON.stringify(right);
-}
-function asRecord(value) {
-	return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
-}
-var SCHEMA_PROPERTY_TYPES = [
-	"object",
-	"array",
-	"string",
-	"number",
-	"integer",
-	"boolean",
-	"null"
-];
-var SCHEMA_ID_PATTERN = /^[a-z][a-z0-9.-]{0,127}$/u;
-/** Complete Semantic Version, matching the named-data schemaRef contract. */
-var SCHEMA_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*))*))?(?:\+([\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*))?$/u;
-function schemaKey(reference) {
-	return `${reference.id}@${reference.version}`;
-}
-function parseSchemaReference(rawId, rawVersion) {
-	const id = String(rawId).trim();
-	const version = String(rawVersion).trim();
-	if (!SCHEMA_ID_PATTERN.test(id)) throw new StructuredDataError("INVALID_SCHEMA", `Schema id must match ${SCHEMA_ID_PATTERN.source}: ${id}`, { schemaId: id });
-	if (!SCHEMA_VERSION_PATTERN.test(version)) throw new StructuredDataError("INVALID_SCHEMA", `Schema version must be a complete Semantic Version: ${version}`, {
-		schemaId: id,
-		schemaVersion: version
-	});
-	return {
-		id,
-		version
-	};
-}
-/** Reads a Schema document from JSON text and refuses malformed schemas before they are stored. */
-function parseSchemaDocument(text, reference) {
-	let document;
-	try {
-		document = parseJson(text);
-	} catch {
-		throw new StructuredDataError("INVALID_SCHEMA", "Schema must be valid JSON.", {
-			schemaId: reference.id,
-			schemaVersion: reference.version
-		});
-	}
-	return assertSchemaDocument(document, reference);
-}
-function assertSchemaDocument(document, reference) {
-	try {
-		validateSchemaDefinition(document, "schema");
-	} catch (error) {
-		throw new StructuredDataError("INVALID_SCHEMA", error instanceof Error ? error.message : String(error), {
-			schemaId: reference.id,
-			schemaVersion: reference.version
-		});
-	}
-	return document;
-}
-function schemaEntry(reference, document) {
-	return {
-		reference,
-		canonical: stringifyJson(document),
-		document
-	};
-}
-/**
-* Checks a whole candidate value and reports the first failure with the schema identity, the data
-* name, the failing path and the expectation. Callers validate the complete candidate before they
-* replace a binding, so a rejected update leaves the previous value in place.
-*/
-function assertValueMatchesSchema(value, entry, dataName) {
-	const [first] = validateAgainstSchema(value, entry.document);
-	if (first === void 0) return;
-	const { path, expected } = splitDiagnostic(first);
-	throw new StructuredDataError("SCHEMA_VALIDATION_FAILED", `Structured data ${dataName} does not match schema ${schemaKey(entry.reference)}: ${first}`, {
-		dataName,
-		schemaId: entry.reference.id,
-		schemaVersion: entry.reference.version,
-		path,
-		expected
-	});
-}
-function beginSchemaDraft(reference, additionalProperties) {
-	return {
-		reference,
-		additionalProperties,
-		properties: /* @__PURE__ */ new Map(),
-		required: /* @__PURE__ */ new Set()
-	};
-}
-function addDraftProperty(draft, rawProperty, rawType, required) {
-	const property = String(rawProperty).trim();
-	if (property.length === 0) throw new StructuredDataError("INVALID_SCHEMA", "Property name cannot be empty.", {
-		schemaId: draft.reference.id,
-		schemaVersion: draft.reference.version
-	});
-	const type = String(rawType).trim();
-	if (!SCHEMA_PROPERTY_TYPES.includes(type)) throw new StructuredDataError("INVALID_SCHEMA", `Property type must be one of ${SCHEMA_PROPERTY_TYPES.join(", ")}: ${type}`, {
-		schemaId: draft.reference.id,
-		schemaVersion: draft.reference.version,
-		path: `$.${property}`,
-		expected: SCHEMA_PROPERTY_TYPES.join(" or ")
-	});
-	draft.properties.set(property, type);
-	if (required) draft.required.add(property);
-	else draft.required.delete(property);
-}
-/**
-* Converts a draft to the same canonical document a text definition of the same shape produces.
-* Property order never matters: object keys are canonicalized and `required` is sorted.
-*/
-function draftToSchemaDocument(draft) {
-	const properties = {};
-	for (const [property, type] of draft.properties) properties[property] = { type };
-	const document = {
-		type: "object",
-		properties,
-		additionalProperties: draft.additionalProperties
-	};
-	if (draft.required.size > 0) document.required = [...draft.required].sort();
-	return document;
-}
-function parseAdditionalProperties(raw, reference) {
-	const value = String(raw).trim();
-	if (value === "allow") return true;
-	if (value === "reject") return false;
-	throw new StructuredDataError("INVALID_SCHEMA", `Extra properties must be allow or reject: ${value}`, {
-		schemaId: reference.id,
-		schemaVersion: reference.version,
-		expected: "allow or reject"
-	});
-}
-function parseRequiredFlag(raw, reference) {
-	const value = String(raw).trim();
-	if (value === "required") return true;
-	if (value === "optional") return false;
-	throw new StructuredDataError("INVALID_SCHEMA", `Property requirement must be required or optional: ${value}`, {
-		schemaId: reference.id,
-		schemaVersion: reference.version,
-		expected: "required or optional"
-	});
-}
-var DIAGNOSTIC_PREDICATES = [
-	" must be ",
-	" must have ",
-	" is required",
-	" is not allowed"
-];
-/**
-* Splits a shared-validator diagnostic into its path and expectation. The message text itself is
-* kept verbatim so a failure reads the same here as it does for a named function argument.
-*/
-function splitDiagnostic(message) {
-	const boundary = DIAGNOSTIC_PREDICATES.map((predicate) => message.indexOf(predicate)).filter((index) => index >= 0).sort((left, right) => left - right)[0];
-	if (boundary === void 0) return {
-		path: "$",
-		expected: message
-	};
-	return {
-		path: message.slice(0, boundary),
-		expected: message.slice(boundary + 1).replace(/^(?:must be|must have|is) /u, "")
-	};
-}
 var STRUCTURED_DATA_NAMESPACE = "structured";
 var STRUCTURED_BODY_MAX_BYTES = 262144;
 var StructuredDataNamedDataProvider = class {
@@ -7631,10 +8762,12 @@ var SCHEMA_OPCODES = /* @__PURE__ */ new Set([
 	"schemaOf"
 ]);
 var StructuredDataExtension = class {
-	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaEnabled = isStructuredSchemaEnabled()) {
+	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaEnabled = isStructuredSchemaEnabled(), documentSourceEnabled = isStructuredDocumentSourceEnabled()) {
 		this.scratch = scratch;
 		this.schemaEnabled = schemaEnabled;
+		this.documentSourceEnabled = documentSourceEnabled;
 		this.disposed = false;
+		this.sourceProjections = /* @__PURE__ */ new Set();
 		this.registries = /* @__PURE__ */ new WeakMap();
 		this.schemaRegistries = /* @__PURE__ */ new WeakMap();
 		this.schemaDrafts = /* @__PURE__ */ new WeakMap();
@@ -7643,13 +8776,12 @@ var StructuredDataExtension = class {
 		this.enabled = enabled;
 		this.unregisterSourceEditors = registerSourceEditors(this.scratch, enabled ? sourceEditorDefinitions : []);
 		const runtime = this.scratch.vm?.runtime;
-		const onDispose = () => {
-			this.dispose();
-		};
+		const onDispose = () => this.clearRuntimeState();
 		const onStop = () => this.clearRuntimeState();
 		this.releaseRuntimeListeners = () => {
 			runtime?.off?.("RUNTIME_DISPOSED", onDispose);
 			runtime?.off?.("PROJECT_STOP_ALL", onStop);
+			runtime?.off?.("PROJECT_LOADED", onStop);
 		};
 		let unregisterFixed = () => {};
 		try {
@@ -7665,6 +8797,8 @@ var StructuredDataExtension = class {
 					runtime.on?.("RUNTIME_DISPOSED", onDispose);
 				}
 			}
+			if (this.documentSourceEnabled && !namedDataEnabled) runtime?.on?.("RUNTIME_DISPOSED", onDispose);
+			if (this.documentSourceEnabled || namedDataEnabled) runtime?.on?.("PROJECT_LOADED", onStop);
 			runtime?.on?.("PROJECT_STOP_ALL", onStop);
 		} catch (error) {
 			this.releaseRuntimeListeners();
@@ -7675,6 +8809,20 @@ var StructuredDataExtension = class {
 			throw error;
 		}
 	}
+	/** Explicitly project preserved source into this extension's transient target bindings. */
+	createSourceProjection(documents) {
+		if (this.disposed || !this.enabled || !this.documentSourceEnabled) throw new StructuredDataError("DATA_NOT_FOUND", "Structured data is unavailable.");
+		const projection = createDocumentSourceProjection({
+			documents,
+			publish: (target, name, value, format) => this.store(target, name, value, format)
+		});
+		this.sourceProjections.add(projection);
+		return projection;
+	}
+	getSchemaResolver(target) {
+		this.requireSchemaSupport();
+		return createReadonlySchemaResolver((reference) => this.disposed ? void 0 : this.schemaRegistries.get(target)?.get(schemaKey(reference)));
+	}
 	getNamedDataProvider() {
 		return this.namedDataProvider;
 	}
@@ -7684,6 +8832,8 @@ var StructuredDataExtension = class {
 	async dispose() {
 		if (this.disposed) return;
 		this.disposed = true;
+		for (const projection of this.sourceProjections) projection.dispose();
+		this.sourceProjections.clear();
 		this.releaseRuntimeListeners();
 		this.unregisterFixedInputEditors();
 		this.unregisterSourceEditors();
@@ -7934,6 +9084,7 @@ var StructuredDataExtension = class {
 		return parsePath(this.scratch.Cast.toString(value));
 	}
 	clearRuntimeState() {
+		for (const projection of this.sourceProjections) projection.clear();
 		this.namedDataProvider?.clearSession();
 		this.registries = /* @__PURE__ */ new WeakMap();
 		this.schemaRegistries = /* @__PURE__ */ new WeakMap();

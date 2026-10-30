@@ -36,19 +36,24 @@ void Scratch;
   await run(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict',
     '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--target', 'ES2020', '--lib', 'ES2022,DOM,DOM.Iterable', 'consumer.ts'], {cwd: temporary});
   const tree = await run('npm', ['ls', '--omit=dev', '--all', '--json'], {cwd: temporary});
-  const forbidden = metadata.name.endsWith('yaml-json')
-    ? /^(?:@kubohiroya\/turbowarp-extension-data-editor|@rjsf\/.*|react|react-dom)$/u
-    : /^(?:@kubohiroya\/turbowarp-extension-data-editor|ajv(?:-.*)?|@rjsf\/.*|react|react-dom)$/u;
+  const forbidden = /^(?:@kubohiroya\/turbowarp-extension-data-editor|@rjsf\/.*|react|react-dom)$/u;
   const packages = new Set<string>();
-  function inspect(tree: DependencyTree) {
+  function inspect(tree: DependencyTree, ancestors: string[] = []) {
     for (const [name, dependency] of Object.entries(tree.dependencies ?? {})) {
       assert.ok(!forbidden.test(name), 'Unexpected production editor dependency: ' + name);
-      packages.add(name); inspect(dependency);
+      // The canonical codec package also ships its separately exported Schema API.
+      if (/^ajv(?:-.*)?$/u.test(name) && !metadata.name.endsWith('yaml-json')) {
+        assert.ok(ancestors.includes('@kubohiroya/turbowarp-yaml-json'),
+          'Schema dependencies must belong to the shared YAML/JSON package: ' + name);
+      }
+      packages.add(name); inspect(dependency, [...ancestors, name]);
     }
   }
   inspect(JSON.parse(tree.stdout));
   const source = await readFile(new URL('../lib-module/src/bundle-module.js', import.meta.url), 'utf8');
-  assert.match(source, /from ['"]yaml['"]/u);
+  assert.match(source, metadata.name.endsWith('structured-data')
+    ? /from ['"]@kubohiroya\/turbowarp-yaml-json\/codec['"]/u
+    : /from ['"]yaml['"]/u);
   assert.doesNotMatch(source, /var Parser = class|var Composer = class|compileSchemaBundle|require_ajv|Ajv2020/u);
   process.stdout.write(JSON.stringify({package: metadata.name, packedModuleConsumer: 'passed',
     publicTypes: 'passed', runtimeDependenciesExternal: true, productionPackages: [...packages].sort()}, null, 2) + '\n');

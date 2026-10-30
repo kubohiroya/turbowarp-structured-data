@@ -1,5 +1,8 @@
+import type { SourceDocumentRegistry } from '@kubohiroya/turbowarp-document-data/composition';
 import type { ScratchApi, TurboWarpExtension, ScratchBlockUtility } from './runtime-api.js';
 import { type NamedDataRegistryService } from '@kubohiroya/turbowarp-named-data/composition';
+import { type SchemaEntry, type SchemaReference } from './schema.js';
+import { type JsonValue } from './core.js';
 import { StructuredDataNamedDataProvider } from './structured-provider.js';
 interface NamedPathArguments {
     NAME: unknown;
@@ -8,11 +11,13 @@ interface NamedPathArguments {
 export declare class StructuredDataExtension implements TurboWarpExtension {
     private readonly scratch;
     private readonly schemaEnabled;
+    private readonly documentSourceEnabled;
     private readonly enabled;
     private disposed;
     private readonly releaseRuntimeListeners;
     private readonly unregisterSourceEditors;
     private readonly unregisterFixedInputEditors;
+    private readonly sourceProjections;
     private registries;
     private schemaRegistries;
     private schemaDrafts;
@@ -22,7 +27,24 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     private readonly namedDataRegistry?;
     private readonly namedDataRegistration?;
     private readonly unbindNamedDataRegistryLifecycle?;
-    constructor(scratch: ScratchApi, enabled?: boolean, namedDataEnabled?: boolean, schemaEnabled?: boolean);
+    constructor(scratch: ScratchApi, enabled?: boolean, namedDataEnabled?: boolean, schemaEnabled?: boolean, documentSourceEnabled?: boolean);
+    /** Explicitly project preserved source into this extension's transient target bindings. */
+    createSourceProjection(documents: SourceDocumentRegistry): Readonly<{
+        project(target: object, name: string, reference: import("@kubohiroya/turbowarp-document-data/composition").SourceDocumentReference): import("./document-source.js").SourceProjection;
+        get(target: object, name: string): import("./document-source.js").SourceProjection | undefined;
+        clearTarget(target: object): void;
+        clear: () => void;
+        dispose: () => void;
+    }>;
+    getSchemaResolver(target: object): Readonly<{
+        profile: "structured-subset";
+        resolve: (reference: SchemaReference) => Readonly<SchemaEntry>;
+        inline(reference: SchemaReference): Readonly<{
+            profile: "structured-subset";
+            reference: SchemaReference;
+            document: JsonValue;
+        }>;
+    }>;
     getNamedDataProvider(): StructuredDataNamedDataProvider | undefined;
     getNamedDataRegistry(): NamedDataRegistryService | undefined;
     dispose(): Promise<void>;

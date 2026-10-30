@@ -1,6 +1,7 @@
 import {execFileSync} from 'node:child_process';
-import {cpSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync} from 'node:fs';
-import {join} from 'node:path';
+import {cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import {dirname, join} from 'node:path';
 import {tmpdir} from 'node:os';
 import vm from 'node:vm';
 import {expect, it} from 'vitest';
@@ -82,7 +83,8 @@ it('imports packaged metadata with only yaml installed and without GUI globals',
     mkdirSync(installed, {recursive: true});
     cpSync(new URL('../package.json', import.meta.url), join(installed, 'package.json'));
     cpSync(new URL('../lib-editor', import.meta.url), join(installed, 'lib-editor'), {recursive: true});
-    cpSync(realpathSync(new URL('../node_modules/yaml', import.meta.url)), join(isolated, 'node_modules/yaml'), {recursive: true});
+    const codecRequire = createRequire(import.meta.resolve('@kubohiroya/turbowarp-yaml-json/codec'));
+    cpSync(dirname(codecRequire.resolve('yaml/package.json')), join(isolated, 'node_modules/yaml'), {recursive: true});
     const script = `
       for (const name of ['window', 'document', 'Scratch']) Object.defineProperty(globalThis, name, {
         get() { throw Error('Unexpected GUI access: ' + name); }

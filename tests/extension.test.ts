@@ -1,3 +1,4 @@
+import {createSourceDocumentRegistry} from '@kubohiroya/turbowarp-document-data/composition';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {StructuredDataExtension} from '../src/extension.js';
 import {StructuredDataError} from '../src/core.js';
@@ -25,6 +26,44 @@ describe('StructuredDataExtension', () => {
     expect(extensionConfig.unsandboxed).toBe(true);
     expect(isStructuredDataMvpEnabled({})).toBe(false);
     expect(isStructuredDataMvpEnabled({STRUCTURED_DATA_MVP: true})).toBe(true);
+  });
+
+  it('reads the default-off document source flag only when constructing the extension', () => {
+    const documents = createSourceDocumentRegistry();
+    const off = new StructuredDataExtension(Scratch, true);
+    vi.stubGlobal('STRUCTURED_DOCUMENT_SOURCE', true);
+    expect(() => off.createSourceProjection(documents)).toThrow();
+    const on = new StructuredDataExtension(Scratch, true);
+    vi.stubGlobal('STRUCTURED_DOCUMENT_SOURCE', false);
+    expect(() => on.createSourceProjection(documents)).not.toThrow();
+  });
+
+  it('projects source explicitly into runtime bindings and clears values, not source, on stop', () => {
+    const extension = new StructuredDataExtension(Scratch, true, false, false, true);
+    const util = utility();
+    let source = '# preserved\na: 1\n';
+    const documents = createSourceDocumentRegistry();
+    documents.register({id: 'documents', list: () => [{documentId: 'story', filename: 'story.yml', format: 'yaml'}], open: () => ({
+      inspect: () => ({available: true}), capture: () => ({source}),
+      prepare: async () => {throw new Error('must not write');}, commit: async () => {throw new Error('must not write');}, dispose() {}
+    })});
+    const projection = extension.createSourceProjection(documents);
+    const reference = {providerId: 'documents', documentId: 'story'};
+    projection.project(util.target, 'projected', reference);
+    expect(extension.toJson({NAME: 'projected'}, util)).toBe('{"a":1}');
+    source = 'a: [';
+    expect(() => projection.project(util.target, 'projected', reference)).toThrow();
+    expect(extension.toJson({NAME: 'projected'}, util)).toBe('{"a":1}');
+    const on = Scratch.vm?.runtime?.on as ReturnType<typeof vi.fn>;
+    for (const [event, listener] of on.mock.calls) if (event === 'PROJECT_STOP_ALL') (listener as () => void)();
+    expect(extension.hasStructuredData({NAME: 'projected'}, util)).toBe(false);
+    expect(projection.get(util.target, 'projected')).toBeUndefined();
+    expect(source).toBe('a: [');
+    for (const [event, listener] of on.mock.calls) if (event === 'RUNTIME_DISPOSED') (listener as () => void)();
+    source = '# reloaded\na: 2\n';
+    for (const [event, listener] of on.mock.calls) if (event === 'PROJECT_LOADED') (listener as () => void)();
+    projection.project(util.target, 'projected', reference);
+    expect(extension.toJson({NAME: 'projected'}, util)).toBe('{"a":2}');
   });
 
   it('registers the integrated namespace, codec, path, and loop blocks', () => {

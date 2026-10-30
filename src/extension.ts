@@ -1,3 +1,6 @@
+import {isStructuredDocumentSourceEnabled} from './config.js';
+import {createDocumentSourceProjection, createReadonlySchemaResolver} from './document-source.js';
+import type {SourceDocumentRegistry} from '@kubohiroya/turbowarp-document-data/composition';
 import type {ScratchApi, TurboWarpExtension, ScratchBlockUtility} from './runtime-api.js';
 import {fixedInputEditorDefinitions, registerFixedInputEditors} from './fixed-input-editors.js';
 import {sourceEditorDefinitions} from './editor-schema.js';
@@ -109,6 +112,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
   private readonly releaseRuntimeListeners: () => void;
   private readonly unregisterSourceEditors: () => void;
   private readonly unregisterFixedInputEditors: () => void;
+  private readonly sourceProjections = new Set<ReturnType<typeof createDocumentSourceProjection>>();
   private registries = new WeakMap<object, Map<string, StructuredDataBinding>>();
   private schemaRegistries = new WeakMap<object, Map<string, SchemaEntry>>();
   private schemaDrafts = new WeakMap<object, SchemaDraft>();
@@ -123,16 +127,18 @@ export class StructuredDataExtension implements TurboWarpExtension {
     private readonly scratch: ScratchApi,
     enabled = isStructuredDataMvpEnabled(),
     namedDataEnabled = isNamedDataRegistryMvpEnabled(),
-    private readonly schemaEnabled = isStructuredSchemaEnabled()
+    private readonly schemaEnabled = isStructuredSchemaEnabled(),
+    private readonly documentSourceEnabled = isStructuredDocumentSourceEnabled()
   ) {
     this.enabled = enabled;
     this.unregisterSourceEditors = registerSourceEditors(this.scratch, enabled ? sourceEditorDefinitions : []);
     const runtime = this.scratch.vm?.runtime;
-    const onDispose = () => {void this.dispose();};
+    const onDispose = () => this.clearRuntimeState();
     const onStop = () => this.clearRuntimeState();
     this.releaseRuntimeListeners = () => {
       runtime?.off?.('RUNTIME_DISPOSED', onDispose);
       runtime?.off?.('PROJECT_STOP_ALL', onStop);
+      runtime?.off?.('PROJECT_LOADED', onStop);
     };
     let unregisterFixed = () => {};
     try {
@@ -156,6 +162,8 @@ export class StructuredDataExtension implements TurboWarpExtension {
         runtime.on?.('RUNTIME_DISPOSED', onDispose);
       }
     }
+    if (this.documentSourceEnabled && !namedDataEnabled) runtime?.on?.('RUNTIME_DISPOSED', onDispose);
+    if (this.documentSourceEnabled || namedDataEnabled) runtime?.on?.('PROJECT_LOADED', onStop);
     runtime?.on?.('PROJECT_STOP_ALL', onStop);
     } catch (error) {
       this.releaseRuntimeListeners();
@@ -165,6 +173,20 @@ export class StructuredDataExtension implements TurboWarpExtension {
       void this.namedDataRegistration?.unregister().catch(() => {});
       throw error;
     }
+  }
+
+  /** Explicitly project preserved source into this extension's transient target bindings. */
+  public createSourceProjection(documents: SourceDocumentRegistry) {
+    if (this.disposed || !this.enabled || !this.documentSourceEnabled) throw new StructuredDataError('DATA_NOT_FOUND', 'Structured data is unavailable.');
+    const projection = createDocumentSourceProjection({documents,
+      publish: (target, name, value, format) => this.store(target, name, value, format)});
+    this.sourceProjections.add(projection);
+    return projection;
+  }
+
+  public getSchemaResolver(target: object) {
+    this.requireSchemaSupport();
+    return createReadonlySchemaResolver(reference => this.disposed ? undefined : this.schemaRegistries.get(target)?.get(schemaKey(reference)));
   }
 
   public getNamedDataProvider(): StructuredDataNamedDataProvider | undefined {
@@ -178,6 +200,8 @@ export class StructuredDataExtension implements TurboWarpExtension {
   public async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    for (const projection of this.sourceProjections) projection.dispose();
+    this.sourceProjections.clear();
     this.releaseRuntimeListeners();
     this.unregisterFixedInputEditors();
     this.unregisterSourceEditors();
@@ -575,6 +599,7 @@ export class StructuredDataExtension implements TurboWarpExtension {
   }
 
   private clearRuntimeState(): void {
+    for (const projection of this.sourceProjections) projection.clear();
     this.namedDataProvider?.clearSession();
     this.registries = new WeakMap();
     this.schemaRegistries = new WeakMap();
