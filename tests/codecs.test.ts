@@ -17,6 +17,17 @@ describe('JSON and YAML codecs', () => {
     expect(parseJsonDocument(renderJsonDocument(value))).toEqual(value);
   });
 
+  it('retains canonical integer and supplementary-character key ordering and legacy diagnostics', () => {
+    const prototypeValue = parseJsonDocument('{"__proto__":{"kept":true}}');
+    expect(renderJsonDocument(prototypeValue)).toBe('{"__proto__":{"kept":true}}');
+    const value = parseJsonDocument('{"2":2,"10":10,"𐀀":1,"":2}');
+    expect(renderJsonDocument(value)).toBe('{"10":10,"2":2,"":2,"𐀀":1}');
+    expect(renderYamlDocument(value)).toBe('"10": 10\n"2": 2\n"": 2\n"𐀀": 1');
+    expect(() => parseYamlDocument('base: &x [1]\ncopy: *x')).toThrow('INVALID_YAML: YAML aliases are not allowed.');
+    expect(() => parseJsonDocument('{')).toThrow('INVALID_JSON: Input must be valid JSON.');
+    expect(renderJsonDocument(Array(50001).fill(1)).startsWith('[1,1')).toBe(true);
+  });
+
   it('rejects aliases, non-string keys, invalid JSON, and excessive input', () => {
     expect(() => parseYamlDocument('base: &x [1]\ncopy: *x')).toThrowError(
       expect.objectContaining({code: 'INVALID_YAML'})

@@ -160,3 +160,5 @@ Schemaが記述する契約の根拠は実getInfoの宣言と既存の純粋なr
 既存MAXの非空finiteなNumber alias（例`001`・`+1`・`0x10`）はNumberによる表示投影だけを行い、無変更rawを保存し直しません。空白・非finite・投影不能値はreadonlyとし、0/defaultを補いません。新しい入力にはこれらaliasを許可せずNP-finite-new-input-v1を適用します。
 
 登録は拡張インスタンスの構築時に存在する任意の editor API を使用します。後からの API 追加や差し替えには自動追従しません。起動設定を変更した場合は GUI を再読み込みし、拡張インスタンスを再構築してください。
+
+原文を正本として保持し構造化データへ変換する API と Schema の読み取り境界は [文書原文からの投影](docs/document-source.ja.md) を参照してください。

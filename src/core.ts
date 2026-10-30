@@ -259,7 +259,7 @@ function readSegment(value: JsonValue, segment: PathSegment): JsonValue {
   return value[segment.value] as JsonValue;
 }
 
-function cloneJson(value: JsonValue): JsonValue {
+export function cloneJson(value: JsonValue): JsonValue {
   if (Array.isArray(value)) return value.map(cloneJson);
   if (isJsonObject(value)) {
     return Object.fromEntries(

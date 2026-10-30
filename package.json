@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.10.0",
+  "version": "0.11.0-rc.0",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": {
     "name": "Hiroya Kubo",
@@ -39,11 +39,13 @@
     "LICENSE",
     "lib-editor/",
     "lib-module/",
-    "assets/block-icon.svg"
+    "assets/block-icon.svg",
+    "lib-source/"
   ],
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "tag": "next"
   },
   "packageManager": "pnpm@11.28.8",
   "engines": {
@@ -52,7 +54,7 @@
   "scripts": {
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
-    "build": "vite build && pnpm run build:editor && pnpm run build:module",
+    "build": "vite build && pnpm run build:editor && pnpm run build:module && pnpm run build:source",
     "lint": "eslint src tests scripts vite.config.ts vite.editor.config.ts eslint.config.ts vite.module.config.ts",
     "test": "vitest run",
     "docs": "node scripts/generate-readme.ts && node scripts/generate-fixed-input-docs.mjs",
@@ -67,12 +69,13 @@
     "check:module": "node scripts/check-bundle-module.ts",
     "samples:build": "node scripts/build-samples.mjs",
     "samples:check": "node scripts/build-samples.mjs --check && node --test scripts/verify-samples.mjs",
-    "pages:build": "node scripts/prepare-pages.mjs"
+    "pages:build": "node scripts/prepare-pages.mjs",
+    "build:source": "tsc -p tsconfig.source.json"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@kubohiroya/turbowarp-extension-manifest": "^0.5.0",
-    "@kubohiroya/turbowarp-named-data": "^0.7.0",
+    "@kubohiroya/turbowarp-named-data": "0.8.0-rc.0",
     "@kubohiroya/vite-plugin-turbowarp-extension": "^0.10.0",
     "@types/node": "^24.13.3",
     "eslint": "^9.39.5",
@@ -82,20 +85,15 @@
     "vite": "^8.2.2",
     "vitest": "^5.0.0",
     "react-dom": "18.3.1",
-    "@kubohiroya/turbowarp-extension-data-editor": "^0.5.0",
-    "@kubohiroya/turbowarp-named-functions": "^0.4.0"
+    "@kubohiroya/turbowarp-extension-data-editor": "^0.5.0"
   },
   "dependencies": {
-    "yaml": "^2.9.1"
+    "@kubohiroya/turbowarp-yaml-json": "0.8.0-rc.0",
+    "@kubohiroya/turbowarp-document-data": "0.5.0-rc.0",
+    "@kubohiroya/turbowarp-named-functions": "0.4.1-rc.1"
   },
   "peerDependencies": {
-    "@kubohiroya/turbowarp-named-data": ">=0.4.0 <1"
-  },
-  "gitHead": "52716066315a525f2dae1db8566e9708c696511a",
-  "x-turbowarp-source": {
-    "revision": "52716066315a525f2dae1db8566e9708c696511a",
-    "revisionRole": "base-commit",
-    "sourceState": "local-release-overlay"
+    "@kubohiroya/turbowarp-named-data": "0.8.0-rc.0"
   },
   "exports": {
     "./*": "./*",
@@ -106,6 +104,10 @@
     "./bundle-module": {
       "types": "./lib-module/src/bundle-module.d.ts",
       "import": "./lib-module/src/bundle-module.js"
+    },
+    "./document-source": {
+      "types": "./lib-source/document-source.d.ts",
+      "import": "./lib-source/document-source.js"
     }
   }
 }

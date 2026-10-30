@@ -1,4 +1,5 @@
-import { LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument } from "yaml";
+import { PARSE_LIMITS, parseValue, serializeValue } from "@kubohiroya/turbowarp-yaml-json/codec";
+import { validateAgainstSchema, validateSchemaDefinition } from "@kubohiroya/turbowarp-named-functions/composition";
 import { NamedDataError, bindNamedDataRegistryLifecycle, installNamedDataRegistry } from "@kubohiroya/turbowarp-named-data/composition";
 function isNamedDataSchemaRefEnabled(source = globalThis) {
 	const value = source.__TW_NAMED_DATA_FEATURE_FLAGS__?.NAMED_DATA_SCHEMA_REF;
@@ -16,6 +17,11 @@ function isStructuredSchemaEnabled(source = globalThis) {
 	const value = source.STRUCTURED_SCHEMA;
 	return value === void 0 ? false : value === true || value === "true";
 }
+/** Read once by the extension constructor; pure source adapters remain explicit opt-in APIs. */
+function isStructuredDocumentSourceEnabled(source = globalThis) {
+	const value = source.STRUCTURED_DOCUMENT_SOURCE;
+	return value === void 0 ? false : value === true || value === "true";
+}
 var extensionConfig = {
 	id: "kubohiroyastructureddata",
 	slug: "structured-data",
@@ -27,6 +33,525 @@ var extensionConfig = {
 	docsURI: "https://kubohiroya.github.io/turbowarp-structured-data/",
 	blockIconURI: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3QgeD0iNCIgeT0iOCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzhBNTVENyIvPjxwYXRoIGQ9Ik0xOSAxNWMtMyAwLTIgNy01IDkgMyAyIDIgOSA1IDkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNMjkgMTVjMyAwIDIgNyA1IDktMyAyLTIgOS01IDkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSIyLjIiIGZpbGw9IiNmZmYiLz48L3N2Zz4="
 };
+var StructuredDataError = class extends Error {
+	constructor(code, message, details = {}) {
+		super(`${code}: ${message}`);
+		this.name = "StructuredDataError";
+		this.code = code;
+		this.details = details;
+	}
+};
+function parseJson(text) {
+	try {
+		const value = JSON.parse(String(text));
+		assertJsonValue(value);
+		return value;
+	} catch (error) {
+		if (error instanceof StructuredDataError) throw error;
+		throw new StructuredDataError("INVALID_JSON", "Input must be valid JSON.");
+	}
+}
+function stringifyJson(value) {
+	if (Array.isArray(value)) return `[${value.map(stringifyJson).join(",")}]`;
+	if (isJsonObject(value)) return `{${Object.keys(value).sort(compareUnicodeCodePoints).map((key) => `${JSON.stringify(key)}:${stringifyJson(value[key])}`).join(",")}}`;
+	return JSON.stringify(value);
+}
+function parsePath(input) {
+	const path = String(input);
+	if (!path.startsWith("$")) invalidPath();
+	const segments = [];
+	let cursor = 1;
+	while (cursor < path.length) {
+		if (path[cursor] === ".") {
+			const match = /^[A-Za-z_][A-Za-z0-9_]*/u.exec(path.slice(cursor + 1));
+			if (!match) invalidPath();
+			segments.push({
+				kind: "key",
+				value: match[0]
+			});
+			cursor += match[0].length + 1;
+			continue;
+		}
+		if (path[cursor] !== "[") invalidPath();
+		cursor += 1;
+		if (path[cursor] === "\"") {
+			const end = scanJsonString(path, cursor);
+			let key;
+			try {
+				key = JSON.parse(path.slice(cursor, end));
+			} catch {
+				invalidPath();
+			}
+			if (typeof key !== "string" || path[end] !== "]") invalidPath();
+			segments.push({
+				kind: "key",
+				value: key
+			});
+			cursor = end + 1;
+			continue;
+		}
+		const match = /^(0|[1-9][0-9]*)\]/u.exec(path.slice(cursor));
+		if (!match) invalidPath();
+		const index = Number(match[1]);
+		if (!Number.isSafeInteger(index)) invalidPath();
+		segments.push({
+			kind: "index",
+			value: index
+		});
+		cursor += match[0].length;
+	}
+	return segments;
+}
+function getAtPath(root, segments) {
+	let current = root;
+	for (const segment of segments) current = readSegment(current, segment);
+	return current;
+}
+function hasAtPath(root, segments) {
+	try {
+		getAtPath(root, segments);
+		return true;
+	} catch (error) {
+		if (error instanceof StructuredDataError && (error.code === "PATH_NOT_FOUND" || error.code === "INDEX_OUT_OF_RANGE")) return false;
+		throw error;
+	}
+}
+function setAtPath(root, segments, replacement) {
+	if (segments.length === 0) return cloneJson(replacement);
+	return updateParent(root, segments, (parent, segment) => {
+		if (segment.kind === "key") {
+			if (!isJsonObject(parent)) typeMismatch("Object path segment requires an object.");
+			return {
+				...parent,
+				[segment.value]: cloneJson(replacement)
+			};
+		}
+		if (!Array.isArray(parent)) typeMismatch("Index path segment requires an array.");
+		if (segment.value >= parent.length) indexOutOfRange();
+		const result = parent.slice();
+		result[segment.value] = cloneJson(replacement);
+		return result;
+	});
+}
+function deleteAtPath(root, segments) {
+	if (segments.length === 0) throw new StructuredDataError("INVALID_PATH", "The root value cannot be deleted.");
+	return updateParent(root, segments, (parent, segment) => {
+		if (segment.kind === "key") {
+			if (!isJsonObject(parent)) typeMismatch("Object path segment requires an object.");
+			if (!Object.hasOwn(parent, segment.value)) pathNotFound();
+			const result = { ...parent };
+			delete result[segment.value];
+			return result;
+		}
+		if (!Array.isArray(parent)) typeMismatch("Index path segment requires an array.");
+		if (segment.value >= parent.length) indexOutOfRange();
+		const result = parent.slice();
+		result.splice(segment.value, 1);
+		return result;
+	});
+}
+function keysAtPath(root, segments) {
+	const value = getAtPath(root, segments);
+	if (!isJsonObject(value)) typeMismatch("Keys require an object.");
+	return Object.keys(value).sort(compareUnicodeCodePoints);
+}
+function lengthAtPath(root, segments) {
+	const value = getAtPath(root, segments);
+	if (!Array.isArray(value)) typeMismatch("Length requires an array.");
+	return value.length;
+}
+function iterationEntries(root, segments, maximum) {
+	if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1e3) throw new StructuredDataError("ITERATION_LIMIT_EXCEEDED", "Maximum must be from 1 to 1000.");
+	const value = getAtPath(root, segments);
+	const entries = Array.isArray(value) ? value.map((item, index) => ({
+		key: String(index),
+		value: item
+	})) : isJsonObject(value) ? Object.keys(value).sort(compareUnicodeCodePoints).map((key) => ({
+		key,
+		value: value[key]
+	})) : typeMismatch("Iteration requires an array or object.");
+	if (entries.length > maximum) throw new StructuredDataError("ITERATION_LIMIT_EXCEEDED", `Collection contains ${entries.length} items, above maximum ${maximum}.`);
+	return entries;
+}
+function updateParent(root, segments, update) {
+	const [segment, ...remaining] = segments;
+	if (!segment) return root;
+	if (remaining.length === 0) return update(root, segment);
+	const next = updateParent(readSegment(root, segment), remaining, update);
+	if (segment.kind === "key") {
+		if (!isJsonObject(root)) typeMismatch("Object path segment requires an object.");
+		return {
+			...root,
+			[segment.value]: next
+		};
+	}
+	if (!Array.isArray(root)) typeMismatch("Index path segment requires an array.");
+	const result = root.slice();
+	result[segment.value] = next;
+	return result;
+}
+function readSegment(value, segment) {
+	if (segment.kind === "key") {
+		if (!isJsonObject(value)) typeMismatch("Object path segment requires an object.");
+		if (!Object.hasOwn(value, segment.value)) pathNotFound();
+		return value[segment.value];
+	}
+	if (!Array.isArray(value)) typeMismatch("Index path segment requires an array.");
+	if (segment.value >= value.length) indexOutOfRange();
+	return value[segment.value];
+}
+function cloneJson(value) {
+	if (Array.isArray(value)) return value.map(cloneJson);
+	if (isJsonObject(value)) return Object.fromEntries(Object.keys(value).map((key) => [key, cloneJson(value[key])]));
+	return value;
+}
+function assertJsonValue(value) {
+	if (value === null || typeof value === "string" || typeof value === "boolean") return;
+	if (typeof value === "number" && Number.isFinite(value)) return;
+	if (Array.isArray(value)) {
+		for (const item of value) assertJsonValue(item);
+		return;
+	}
+	if (typeof value === "object") {
+		for (const item of Object.values(value)) assertJsonValue(item);
+		return;
+	}
+	throw new StructuredDataError("INVALID_JSON", "JSON contains an unsupported value.");
+}
+function isJsonObject(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function scanJsonString(path, start) {
+	let escaped = false;
+	for (let index = start + 1; index < path.length; index += 1) {
+		const character = path[index];
+		if (escaped) escaped = false;
+		else if (character === "\\") escaped = true;
+		else if (character === "\"") return index + 1;
+	}
+	invalidPath();
+}
+function compareUnicodeCodePoints(left, right) {
+	const leftPoints = Array.from(left, (character) => character.codePointAt(0));
+	const rightPoints = Array.from(right, (character) => character.codePointAt(0));
+	const length = Math.min(leftPoints.length, rightPoints.length);
+	for (let index = 0; index < length; index += 1) {
+		const difference = leftPoints[index] - rightPoints[index];
+		if (difference !== 0) return difference;
+	}
+	return leftPoints.length - rightPoints.length;
+}
+function invalidPath() {
+	throw new StructuredDataError("INVALID_PATH", "Path does not match the supported syntax.");
+}
+function pathNotFound() {
+	throw new StructuredDataError("PATH_NOT_FOUND", "Path does not exist.");
+}
+function typeMismatch(message) {
+	throw new StructuredDataError("TYPE_MISMATCH", message);
+}
+function indexOutOfRange() {
+	throw new StructuredDataError("INDEX_OUT_OF_RANGE", "Array index is out of range.");
+}
+var PARSE_LIMITS$1 = {
+	maxInputBytes: PARSE_LIMITS.maxInputBytes,
+	maxDepth: PARSE_LIMITS.maxDepth,
+	maxNodes: PARSE_LIMITS.maxNodes
+};
+function parse(source, format) {
+	const parsed = parseValue(source, format);
+	if (parsed.success) return parsed.value;
+	const diagnostic = parsed.diagnostic;
+	if (diagnostic.code === "MAX_INPUT_BYTES_EXCEEDED") throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Input is ${new TextEncoder().encode(source).byteLength} bytes; maximum is ${PARSE_LIMITS$1.maxInputBytes}.`);
+	if (diagnostic.code === "MAX_DEPTH_EXCEEDED") throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum nesting depth ${PARSE_LIMITS$1.maxDepth}.`);
+	if (diagnostic.code === "MAX_NODES_EXCEEDED") throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum node count ${PARSE_LIMITS$1.maxNodes}.`);
+	if (format === "json") throw new StructuredDataError("INVALID_JSON", diagnostic.code === "INVALID_JSON_VALUE" ? "JSON contains an unsupported value." : "Input must be valid JSON.");
+	const ownerMessage = {
+		YAML_ALIAS_NOT_ALLOWED: "YAML aliases are not allowed.",
+		YAML_NON_STRING_KEY: "YAML map keys must be strings."
+	};
+	if (ownerMessage[diagnostic.code]) throw new StructuredDataError("INVALID_YAML", ownerMessage[diagnostic.code]);
+	if (diagnostic.code === "INVALID_YAML_VALUE") throw new StructuredDataError("INVALID_YAML", diagnostic.message.replace(/^Parsed YAML/, "YAML"));
+	throw new StructuredDataError("INVALID_YAML", `${diagnostic.code} at line ${diagnostic.line}, column ${diagnostic.column}: ${diagnostic.message}`);
+}
+function parseJsonDocument(source) {
+	return parse(source, "json");
+}
+function parseYamlDocument(source) {
+	return parse(source, "yaml");
+}
+function renderJsonDocument(value) {
+	return serializeValue(value, {
+		format: "json",
+		keyOrder: "unicode",
+		indent: 0,
+		trailingNewline: false,
+		enforceValueLimits: false
+	});
+}
+function renderYamlDocument(value) {
+	return serializeValue(value, {
+		format: "yaml",
+		keyOrder: "unicode",
+		trailingNewline: false,
+		enforceValueLimits: false
+	});
+}
+var SCHEMA_PROPERTY_TYPES = [
+	"object",
+	"array",
+	"string",
+	"number",
+	"integer",
+	"boolean",
+	"null"
+];
+var SCHEMA_ID_PATTERN = /^[a-z][a-z0-9.-]{0,127}$/u;
+/** Complete Semantic Version, matching the named-data schemaRef contract. */
+var SCHEMA_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*))*))?(?:\+([\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*))?$/u;
+function schemaKey(reference) {
+	return `${reference.id}@${reference.version}`;
+}
+function parseSchemaReference(rawId, rawVersion) {
+	const id = String(rawId).trim();
+	const version = String(rawVersion).trim();
+	if (!SCHEMA_ID_PATTERN.test(id)) throw new StructuredDataError("INVALID_SCHEMA", `Schema id must match ${SCHEMA_ID_PATTERN.source}: ${id}`, { schemaId: id });
+	if (!SCHEMA_VERSION_PATTERN.test(version)) throw new StructuredDataError("INVALID_SCHEMA", `Schema version must be a complete Semantic Version: ${version}`, {
+		schemaId: id,
+		schemaVersion: version
+	});
+	return {
+		id,
+		version
+	};
+}
+/** Reads a Schema document from JSON text and refuses malformed schemas before they are stored. */
+function parseSchemaDocument(text, reference) {
+	let document;
+	try {
+		document = parseJson(text);
+	} catch {
+		throw new StructuredDataError("INVALID_SCHEMA", "Schema must be valid JSON.", {
+			schemaId: reference.id,
+			schemaVersion: reference.version
+		});
+	}
+	return assertSchemaDocument(document, reference);
+}
+function assertSchemaDocument(document, reference) {
+	try {
+		validateSchemaDefinition(document, "schema");
+	} catch (error) {
+		throw new StructuredDataError("INVALID_SCHEMA", error instanceof Error ? error.message : String(error), {
+			schemaId: reference.id,
+			schemaVersion: reference.version
+		});
+	}
+	return document;
+}
+function schemaEntry(reference, document) {
+	return {
+		reference,
+		canonical: stringifyJson(document),
+		document
+	};
+}
+/**
+* Checks a whole candidate value and reports the first failure with the schema identity, the data
+* name, the failing path and the expectation. Callers validate the complete candidate before they
+* replace a binding, so a rejected update leaves the previous value in place.
+*/
+function assertValueMatchesSchema(value, entry, dataName) {
+	const [first] = validateAgainstSchema(value, entry.document);
+	if (first === void 0) return;
+	const { path, expected } = splitDiagnostic(first);
+	throw new StructuredDataError("SCHEMA_VALIDATION_FAILED", `Structured data ${dataName} does not match schema ${schemaKey(entry.reference)}: ${first}`, {
+		dataName,
+		schemaId: entry.reference.id,
+		schemaVersion: entry.reference.version,
+		path,
+		expected
+	});
+}
+function beginSchemaDraft(reference, additionalProperties) {
+	return {
+		reference,
+		additionalProperties,
+		properties: /* @__PURE__ */ new Map(),
+		required: /* @__PURE__ */ new Set()
+	};
+}
+function addDraftProperty(draft, rawProperty, rawType, required) {
+	const property = String(rawProperty).trim();
+	if (property.length === 0) throw new StructuredDataError("INVALID_SCHEMA", "Property name cannot be empty.", {
+		schemaId: draft.reference.id,
+		schemaVersion: draft.reference.version
+	});
+	const type = String(rawType).trim();
+	if (!SCHEMA_PROPERTY_TYPES.includes(type)) throw new StructuredDataError("INVALID_SCHEMA", `Property type must be one of ${SCHEMA_PROPERTY_TYPES.join(", ")}: ${type}`, {
+		schemaId: draft.reference.id,
+		schemaVersion: draft.reference.version,
+		path: `$.${property}`,
+		expected: SCHEMA_PROPERTY_TYPES.join(" or ")
+	});
+	draft.properties.set(property, type);
+	if (required) draft.required.add(property);
+	else draft.required.delete(property);
+}
+/**
+* Converts a draft to the same canonical document a text definition of the same shape produces.
+* Property order never matters: object keys are canonicalized and `required` is sorted.
+*/
+function draftToSchemaDocument(draft) {
+	const properties = {};
+	for (const [property, type] of draft.properties) properties[property] = { type };
+	const document = {
+		type: "object",
+		properties,
+		additionalProperties: draft.additionalProperties
+	};
+	if (draft.required.size > 0) document.required = [...draft.required].sort();
+	return document;
+}
+function parseAdditionalProperties(raw, reference) {
+	const value = String(raw).trim();
+	if (value === "allow") return true;
+	if (value === "reject") return false;
+	throw new StructuredDataError("INVALID_SCHEMA", `Extra properties must be allow or reject: ${value}`, {
+		schemaId: reference.id,
+		schemaVersion: reference.version,
+		expected: "allow or reject"
+	});
+}
+function parseRequiredFlag(raw, reference) {
+	const value = String(raw).trim();
+	if (value === "required") return true;
+	if (value === "optional") return false;
+	throw new StructuredDataError("INVALID_SCHEMA", `Property requirement must be required or optional: ${value}`, {
+		schemaId: reference.id,
+		schemaVersion: reference.version,
+		expected: "required or optional"
+	});
+}
+var DIAGNOSTIC_PREDICATES = [
+	" must be ",
+	" must have ",
+	" is required",
+	" is not allowed"
+];
+/**
+* Splits a shared-validator diagnostic into its path and expectation. The message text itself is
+* kept verbatim so a failure reads the same here as it does for a named function argument.
+*/
+function splitDiagnostic(message) {
+	const boundary = DIAGNOSTIC_PREDICATES.map((predicate) => message.indexOf(predicate)).filter((index) => index >= 0).sort((left, right) => left - right)[0];
+	if (boundary === void 0) return {
+		path: "$",
+		expected: message
+	};
+	return {
+		path: message.slice(0, boundary),
+		expected: message.slice(boundary + 1).replace(/^(?:must be|must have|is) /u, "")
+	};
+}
+/** An explicit one-way projection. It never prepares, commits or serializes source documents. */
+function createDocumentSourceProjection({ documents, runtime, publish }) {
+	let values = /* @__PURE__ */ new WeakMap();
+	let disposed = false;
+	let generation = 0;
+	const clear = () => {
+		values = /* @__PURE__ */ new WeakMap();
+		generation++;
+	};
+	const stop = () => clear();
+	const close = () => {
+		if (disposed) return;
+		disposed = true;
+		clear();
+		runtime?.off?.("PROJECT_STOP_ALL", stop);
+		runtime?.off?.("RUNTIME_DISPOSED", stop);
+		runtime?.off?.("PROJECT_LOADED", stop);
+	};
+	runtime?.on("PROJECT_STOP_ALL", stop);
+	runtime?.on("RUNTIME_DISPOSED", stop);
+	runtime?.on("PROJECT_LOADED", stop);
+	return Object.freeze({
+		project(target, name, reference) {
+			if (disposed) throw new StructuredDataError("DATA_NOT_FOUND", "The source projection session has ended.");
+			if (target === null || typeof target !== "object" && typeof target !== "function") throw new StructuredDataError("TYPE_MISMATCH", "A runtime target is required.");
+			if (typeof name !== "string" || !name.trim()) throw new StructuredDataError("INVALID_NAME", "Structured data name cannot be empty.");
+			const identity = Object.freeze({ ...reference });
+			const metadata = documents.list().find((item) => item.reference.providerId === identity.providerId && item.reference.documentId === identity.documentId);
+			if (!metadata) throw new StructuredDataError("DATA_NOT_FOUND", "The source document does not exist.");
+			const format = metadata.format;
+			if (format !== "json" && format !== "yaml") throw new StructuredDataError("TYPE_MISMATCH", "A source document must declare JSON or YAML format.");
+			const current = generation;
+			const adapter = documents.open(identity);
+			let value;
+			try {
+				const captured = adapter.capture();
+				value = format === "json" ? parseJsonDocument(captured.source) : parseYamlDocument(captured.source);
+			} finally {
+				adapter.dispose();
+			}
+			if (disposed || current !== generation) throw new StructuredDataError("DATA_NOT_FOUND", "The runtime session changed during source projection.");
+			const candidate = freeze({
+				reference: identity,
+				filename: metadata.filename,
+				format,
+				value: cloneJson(value)
+			});
+			publish?.(target, name.trim(), cloneJson(value), format);
+			let bindings = values.get(target);
+			if (!bindings) {
+				bindings = /* @__PURE__ */ new Map();
+				values.set(target, bindings);
+			}
+			bindings.set(name.trim(), candidate);
+			return candidate;
+		},
+		get(target, name) {
+			return values.get(target)?.get(name.trim());
+		},
+		clearTarget(target) {
+			values.delete(target);
+			generation++;
+		},
+		clear,
+		dispose: close
+	});
+}
+function freeze(value) {
+	if (value && typeof value === "object" && !Object.isFrozen(value)) {
+		for (const child of Object.values(value)) freeze(child);
+		Object.freeze(value);
+	}
+	return value;
+}
+/** The legacy runtime subset is identified explicitly; this is not a full JSON Schema engine. */
+function createReadonlySchemaResolver(lookup) {
+	const resolve = (reference) => {
+		const exact = parseSchemaReference(reference.id, reference.version);
+		const entry = lookup(exact);
+		if (!entry || entry.reference.id !== exact.id || entry.reference.version !== exact.version) throw new StructuredDataError("SCHEMA_NOT_FOUND", `Schema does not exist: ${schemaKey(exact)}`, {
+			schemaId: exact.id,
+			schemaVersion: exact.version
+		});
+		return freeze(JSON.parse(JSON.stringify(entry)));
+	};
+	return Object.freeze({
+		profile: "structured-subset",
+		resolve,
+		inline(reference) {
+			const entry = resolve(reference);
+			return Object.freeze({
+				profile: "structured-subset",
+				reference: entry.reference,
+				document: entry.document
+			});
+		}
+	});
+}
 var numberToken = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/u;
 var invalidNumber = Object.freeze({
 	kind: "invalid",
@@ -296,340 +821,6 @@ var jsonValueSchemaBundle = Object.freeze({
 		generationSources: []
 	}
 });
-var StructuredDataError = class extends Error {
-	constructor(code, message, details = {}) {
-		super(`${code}: ${message}`);
-		this.name = "StructuredDataError";
-		this.code = code;
-		this.details = details;
-	}
-};
-function parseJson(text) {
-	try {
-		const value = JSON.parse(String(text));
-		assertJsonValue(value);
-		return value;
-	} catch (error) {
-		if (error instanceof StructuredDataError) throw error;
-		throw new StructuredDataError("INVALID_JSON", "Input must be valid JSON.");
-	}
-}
-function stringifyJson(value) {
-	if (Array.isArray(value)) return `[${value.map(stringifyJson).join(",")}]`;
-	if (isJsonObject(value)) return `{${Object.keys(value).sort(compareUnicodeCodePoints).map((key) => `${JSON.stringify(key)}:${stringifyJson(value[key])}`).join(",")}}`;
-	return JSON.stringify(value);
-}
-function parsePath(input) {
-	const path = String(input);
-	if (!path.startsWith("$")) invalidPath();
-	const segments = [];
-	let cursor = 1;
-	while (cursor < path.length) {
-		if (path[cursor] === ".") {
-			const match = /^[A-Za-z_][A-Za-z0-9_]*/u.exec(path.slice(cursor + 1));
-			if (!match) invalidPath();
-			segments.push({
-				kind: "key",
-				value: match[0]
-			});
-			cursor += match[0].length + 1;
-			continue;
-		}
-		if (path[cursor] !== "[") invalidPath();
-		cursor += 1;
-		if (path[cursor] === "\"") {
-			const end = scanJsonString(path, cursor);
-			let key;
-			try {
-				key = JSON.parse(path.slice(cursor, end));
-			} catch {
-				invalidPath();
-			}
-			if (typeof key !== "string" || path[end] !== "]") invalidPath();
-			segments.push({
-				kind: "key",
-				value: key
-			});
-			cursor = end + 1;
-			continue;
-		}
-		const match = /^(0|[1-9][0-9]*)\]/u.exec(path.slice(cursor));
-		if (!match) invalidPath();
-		const index = Number(match[1]);
-		if (!Number.isSafeInteger(index)) invalidPath();
-		segments.push({
-			kind: "index",
-			value: index
-		});
-		cursor += match[0].length;
-	}
-	return segments;
-}
-function getAtPath(root, segments) {
-	let current = root;
-	for (const segment of segments) current = readSegment(current, segment);
-	return current;
-}
-function hasAtPath(root, segments) {
-	try {
-		getAtPath(root, segments);
-		return true;
-	} catch (error) {
-		if (error instanceof StructuredDataError && (error.code === "PATH_NOT_FOUND" || error.code === "INDEX_OUT_OF_RANGE")) return false;
-		throw error;
-	}
-}
-function setAtPath(root, segments, replacement) {
-	if (segments.length === 0) return cloneJson(replacement);
-	return updateParent(root, segments, (parent, segment) => {
-		if (segment.kind === "key") {
-			if (!isJsonObject(parent)) typeMismatch("Object path segment requires an object.");
-			return {
-				...parent,
-				[segment.value]: cloneJson(replacement)
-			};
-		}
-		if (!Array.isArray(parent)) typeMismatch("Index path segment requires an array.");
-		if (segment.value >= parent.length) indexOutOfRange();
-		const result = parent.slice();
-		result[segment.value] = cloneJson(replacement);
-		return result;
-	});
-}
-function deleteAtPath(root, segments) {
-	if (segments.length === 0) throw new StructuredDataError("INVALID_PATH", "The root value cannot be deleted.");
-	return updateParent(root, segments, (parent, segment) => {
-		if (segment.kind === "key") {
-			if (!isJsonObject(parent)) typeMismatch("Object path segment requires an object.");
-			if (!Object.hasOwn(parent, segment.value)) pathNotFound();
-			const result = { ...parent };
-			delete result[segment.value];
-			return result;
-		}
-		if (!Array.isArray(parent)) typeMismatch("Index path segment requires an array.");
-		if (segment.value >= parent.length) indexOutOfRange();
-		const result = parent.slice();
-		result.splice(segment.value, 1);
-		return result;
-	});
-}
-function keysAtPath(root, segments) {
-	const value = getAtPath(root, segments);
-	if (!isJsonObject(value)) typeMismatch("Keys require an object.");
-	return Object.keys(value).sort(compareUnicodeCodePoints);
-}
-function lengthAtPath(root, segments) {
-	const value = getAtPath(root, segments);
-	if (!Array.isArray(value)) typeMismatch("Length requires an array.");
-	return value.length;
-}
-function iterationEntries(root, segments, maximum) {
-	if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1e3) throw new StructuredDataError("ITERATION_LIMIT_EXCEEDED", "Maximum must be from 1 to 1000.");
-	const value = getAtPath(root, segments);
-	const entries = Array.isArray(value) ? value.map((item, index) => ({
-		key: String(index),
-		value: item
-	})) : isJsonObject(value) ? Object.keys(value).sort(compareUnicodeCodePoints).map((key) => ({
-		key,
-		value: value[key]
-	})) : typeMismatch("Iteration requires an array or object.");
-	if (entries.length > maximum) throw new StructuredDataError("ITERATION_LIMIT_EXCEEDED", `Collection contains ${entries.length} items, above maximum ${maximum}.`);
-	return entries;
-}
-function updateParent(root, segments, update) {
-	const [segment, ...remaining] = segments;
-	if (!segment) return root;
-	if (remaining.length === 0) return update(root, segment);
-	const next = updateParent(readSegment(root, segment), remaining, update);
-	if (segment.kind === "key") {
-		if (!isJsonObject(root)) typeMismatch("Object path segment requires an object.");
-		return {
-			...root,
-			[segment.value]: next
-		};
-	}
-	if (!Array.isArray(root)) typeMismatch("Index path segment requires an array.");
-	const result = root.slice();
-	result[segment.value] = next;
-	return result;
-}
-function readSegment(value, segment) {
-	if (segment.kind === "key") {
-		if (!isJsonObject(value)) typeMismatch("Object path segment requires an object.");
-		if (!Object.hasOwn(value, segment.value)) pathNotFound();
-		return value[segment.value];
-	}
-	if (!Array.isArray(value)) typeMismatch("Index path segment requires an array.");
-	if (segment.value >= value.length) indexOutOfRange();
-	return value[segment.value];
-}
-function cloneJson(value) {
-	if (Array.isArray(value)) return value.map(cloneJson);
-	if (isJsonObject(value)) return Object.fromEntries(Object.keys(value).map((key) => [key, cloneJson(value[key])]));
-	return value;
-}
-function assertJsonValue(value) {
-	if (value === null || typeof value === "string" || typeof value === "boolean") return;
-	if (typeof value === "number" && Number.isFinite(value)) return;
-	if (Array.isArray(value)) {
-		for (const item of value) assertJsonValue(item);
-		return;
-	}
-	if (typeof value === "object") {
-		for (const item of Object.values(value)) assertJsonValue(item);
-		return;
-	}
-	throw new StructuredDataError("INVALID_JSON", "JSON contains an unsupported value.");
-}
-function isJsonObject(value) {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function scanJsonString(path, start) {
-	let escaped = false;
-	for (let index = start + 1; index < path.length; index += 1) {
-		const character = path[index];
-		if (escaped) escaped = false;
-		else if (character === "\\") escaped = true;
-		else if (character === "\"") return index + 1;
-	}
-	invalidPath();
-}
-function compareUnicodeCodePoints(left, right) {
-	const leftPoints = Array.from(left, (character) => character.codePointAt(0));
-	const rightPoints = Array.from(right, (character) => character.codePointAt(0));
-	const length = Math.min(leftPoints.length, rightPoints.length);
-	for (let index = 0; index < length; index += 1) {
-		const difference = leftPoints[index] - rightPoints[index];
-		if (difference !== 0) return difference;
-	}
-	return leftPoints.length - rightPoints.length;
-}
-function invalidPath() {
-	throw new StructuredDataError("INVALID_PATH", "Path does not match the supported syntax.");
-}
-function pathNotFound() {
-	throw new StructuredDataError("PATH_NOT_FOUND", "Path does not exist.");
-}
-function typeMismatch(message) {
-	throw new StructuredDataError("TYPE_MISMATCH", message);
-}
-function indexOutOfRange() {
-	throw new StructuredDataError("INDEX_OUT_OF_RANGE", "Array index is out of range.");
-}
-var PARSE_LIMITS = {
-	maxInputBytes: 262144,
-	maxDepth: 64,
-	maxNodes: 5e4
-};
-var SIMPLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/u;
-function parseJsonDocument(source) {
-	validateInputSize(source);
-	const value = parseJson(source);
-	validateValueBudget(value, { nodes: 0 }, 0);
-	return value;
-}
-function parseYamlDocument(source) {
-	validateInputSize(source);
-	const lineCounter = new LineCounter();
-	const document = parseDocument(source, {
-		lineCounter,
-		prettyErrors: false,
-		schema: "core",
-		uniqueKeys: true
-	});
-	const problem = document.errors[0] ?? document.warnings[0];
-	if (problem) {
-		const { line, column } = yamlPosition(lineCounter, problem.pos[0]);
-		throw new StructuredDataError("INVALID_YAML", `${problem.code} at line ${line}, column ${column}: ${problem.message}`);
-	}
-	try {
-		return valueFromYamlNode(document.contents, { nodes: 0 }, 0, lineCounter);
-	} catch (error) {
-		if (error instanceof StructuredDataError) throw error;
-		throw new StructuredDataError("INVALID_YAML", error instanceof Error ? error.message : String(error));
-	}
-}
-function renderJsonDocument(value) {
-	return stringifyJson(value);
-}
-function renderYamlDocument(value) {
-	return renderYamlValue(value, 0);
-}
-function valueFromYamlNode(node, budget, depth, lineCounter) {
-	consumeBudget(budget, depth);
-	if (node === null) return null;
-	if (isAlias(node)) throw new StructuredDataError("INVALID_YAML", "YAML aliases are not allowed.");
-	if (isScalar(node)) {
-		const value = node.value;
-		if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number" && Number.isFinite(value)) return value;
-		throw new StructuredDataError("INVALID_YAML", "YAML contains an unsupported scalar value.");
-	}
-	if (isSeq(node)) return node.items.map((item) => valueFromYamlNode(item, budget, depth + 1, lineCounter));
-	if (isMap(node)) return Object.fromEntries(node.items.map((item) => yamlPairToEntry(item, budget, depth, lineCounter)));
-	throw new StructuredDataError("INVALID_YAML", "YAML contains an unsupported node type.");
-}
-function yamlPairToEntry(pair, budget, depth, lineCounter) {
-	if (!isScalar(pair.key) || typeof pair.key.value !== "string") throw new StructuredDataError("INVALID_YAML", "YAML map keys must be strings.");
-	return [pair.key.value, valueFromYamlNode(pair.value, budget, depth + 1, lineCounter)];
-}
-function validateValueBudget(value, budget, depth) {
-	consumeBudget(budget, depth);
-	if (Array.isArray(value)) for (const item of value) validateValueBudget(item, budget, depth + 1);
-	else if (typeof value === "object" && value !== null) for (const item of Object.values(value)) validateValueBudget(item, budget, depth + 1);
-}
-function consumeBudget(budget, depth) {
-	if (depth > PARSE_LIMITS.maxDepth) throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum nesting depth ${PARSE_LIMITS.maxDepth}.`);
-	budget.nodes += 1;
-	if (budget.nodes > PARSE_LIMITS.maxNodes) throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Data exceeds maximum node count ${PARSE_LIMITS.maxNodes}.`);
-}
-function validateInputSize(source) {
-	const bytes = new TextEncoder().encode(source).byteLength;
-	if (bytes > PARSE_LIMITS.maxInputBytes) throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `Input is ${bytes} bytes; maximum is ${PARSE_LIMITS.maxInputBytes}.`);
-}
-function renderYamlValue(value, indent) {
-	if (isObject(value)) {
-		const entries = Object.keys(value).sort(compareUnicodeCodePoints);
-		if (entries.length === 0) return `${spaces(indent)}{}`;
-		return entries.map((key) => renderValuePair(key, value[key], indent)).join("\n");
-	}
-	if (Array.isArray(value)) {
-		if (value.length === 0) return `${spaces(indent)}[]`;
-		return value.map((item) => renderSequenceItem(item, indent)).join("\n");
-	}
-	return `${spaces(indent)}${renderScalar(value)}`;
-}
-function renderValuePair(key, value, indent) {
-	const prefix = `${spaces(indent)}${renderKey(key)}:`;
-	if (!isObject(value) && !Array.isArray(value)) return `${prefix} ${renderScalar(value)}`;
-	return `${prefix}\n${renderYamlValue(value, indent + 2)}`;
-}
-function renderSequenceItem(value, indent) {
-	const prefix = `${spaces(indent)}-`;
-	if (!isObject(value) && !Array.isArray(value)) return `${prefix} ${renderScalar(value)}`;
-	return `${prefix}\n${renderYamlValue(value, indent + 2)}`;
-}
-function renderKey(key) {
-	return SIMPLE_KEY_PATTERN.test(key) ? key : JSON.stringify(key);
-}
-function renderScalar(value) {
-	if (value === null) return "null";
-	if (typeof value === "boolean") return value ? "true" : "false";
-	if (typeof value === "number") return String(value);
-	return JSON.stringify(value);
-}
-function isObject(value) {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function yamlPosition(counter, offset) {
-	const position = counter.linePos(offset);
-	return {
-		line: position.line,
-		column: position.col
-	};
-}
-function spaces(count) {
-	return " ".repeat(count);
-}
 var sourceEditorDefinitions = [
 	{
 		editorId: "json-document-source",
@@ -1316,279 +1507,6 @@ var block_definitions_default = {
 		}
 	]
 };
-/**
-* A small JSON Schema validator for function arguments and returns. It interprets the schema at run time and
-* never generates code, so it also works where `eval` is unavailable (for example Cloudflare Workers).
-*
-* Supported keywords: type, properties, required, additionalProperties (boolean), items, enum,
-* const, minimum, maximum, minLength, maxLength, minItems, maxItems. Other keywords, such as
-* description and title, are ignored.
-*/
-function validateAgainstSchema(value, schema, path = "$") {
-	const rule = asRecord(schema);
-	if (!rule) throw new Error(`${path} must be a JSON Schema object`);
-	assertSchemaNode(rule, path);
-	return validateValue(value, rule, path);
-}
-/** Reject malformed schemas before a function definition or call can use them. */
-function validateSchemaDefinition(schema, label = "schema") {
-	const rule = asRecord(schema);
-	if (!rule) throw new Error(`${label} must be a JSON object`);
-	assertSchemaNode(rule, label);
-}
-function validateValue(value, rule, path) {
-	const errors = [];
-	if (rule.type !== void 0) {
-		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
-		if (!types.some((type) => matchesType(value, type))) return [`${path} must be ${types.join(" or ")}`];
-	}
-	if (Array.isArray(rule.enum) && !rule.enum.some((candidate) => deepEqual(candidate, value))) errors.push(`${path} must be one of ${rule.enum.map((item) => JSON.stringify(item)).join(", ")}`);
-	if ("const" in rule && !deepEqual(rule.const, value)) errors.push(`${path} must be ${JSON.stringify(rule.const)}`);
-	if (typeof value === "number") {
-		if (typeof rule.minimum === "number" && value < rule.minimum) errors.push(`${path} must be >= ${rule.minimum}`);
-		if (typeof rule.maximum === "number" && value > rule.maximum) errors.push(`${path} must be <= ${rule.maximum}`);
-	}
-	if (typeof value === "string") {
-		const length = [...value].length;
-		if (typeof rule.minLength === "number" && length < rule.minLength) errors.push(`${path} must have at least ${rule.minLength} characters`);
-		if (typeof rule.maxLength === "number" && length > rule.maxLength) errors.push(`${path} must have at most ${rule.maxLength} characters`);
-	}
-	if (Array.isArray(value)) {
-		if (typeof rule.minItems === "number" && value.length < rule.minItems) errors.push(`${path} must have at least ${rule.minItems} items`);
-		if (typeof rule.maxItems === "number" && value.length > rule.maxItems) errors.push(`${path} must have at most ${rule.maxItems} items`);
-		if (rule.items !== void 0) value.forEach((item, index) => errors.push(...validateValue(item, rule.items, `${path}[${index}]`)));
-	}
-	const object = asRecord(value);
-	if (object) {
-		const properties = asRecord(rule.properties) ?? {};
-		if (Array.isArray(rule.required)) {
-			for (const name of rule.required) if (typeof name === "string" && !Object.hasOwn(object, name)) errors.push(`${path}.${name} is required`);
-		}
-		for (const [name, child] of Object.entries(object)) if (Object.hasOwn(properties, name)) errors.push(...validateValue(child, properties[name], `${path}.${name}`));
-		else if (rule.additionalProperties === false) errors.push(`${path}.${name} is not allowed`);
-	}
-	return errors;
-}
-function assertSchemaNode(rule, path) {
-	const validTypes = /* @__PURE__ */ new Set([
-		"object",
-		"array",
-		"string",
-		"number",
-		"integer",
-		"boolean",
-		"null"
-	]);
-	if (rule.type !== void 0) {
-		const types = Array.isArray(rule.type) ? rule.type : [rule.type];
-		if (types.length === 0 || types.some((type) => typeof type !== "string" || !validTypes.has(type))) throw new Error(`${path}.type must be a supported JSON Schema type or non-empty type array`);
-	}
-	if (rule.properties !== void 0) {
-		const properties = asRecord(rule.properties);
-		if (!properties) throw new Error(`${path}.properties must be an object`);
-		for (const [name, child] of Object.entries(properties)) {
-			const childRule = asRecord(child);
-			if (!childRule) throw new Error(`${path}.properties.${name} must be a JSON Schema object`);
-			assertSchemaNode(childRule, `${path}.properties.${name}`);
-		}
-	}
-	if (rule.required !== void 0 && (!Array.isArray(rule.required) || rule.required.some((name) => typeof name !== "string"))) throw new Error(`${path}.required must be an array of strings`);
-	if (rule.additionalProperties !== void 0 && typeof rule.additionalProperties !== "boolean") throw new Error(`${path}.additionalProperties must be a boolean`);
-	if (rule.items !== void 0) {
-		const items = asRecord(rule.items);
-		if (!items) throw new Error(`${path}.items must be a JSON Schema object`);
-		assertSchemaNode(items, `${path}.items`);
-	}
-	if (rule.enum !== void 0 && (!Array.isArray(rule.enum) || rule.enum.length === 0)) throw new Error(`${path}.enum must be a non-empty array`);
-	for (const keyword of ["minimum", "maximum"]) if (rule[keyword] !== void 0 && (typeof rule[keyword] !== "number" || !Number.isFinite(rule[keyword]))) throw new Error(`${path}.${keyword} must be a finite number`);
-	for (const keyword of [
-		"minLength",
-		"maxLength",
-		"minItems",
-		"maxItems"
-	]) {
-		const value = rule[keyword];
-		if (value !== void 0 && (typeof value !== "number" || !Number.isInteger(value) || value < 0)) throw new Error(`${path}.${keyword} must be a non-negative integer`);
-	}
-	if (typeof rule.minimum === "number" && typeof rule.maximum === "number" && rule.minimum > rule.maximum) throw new Error(`${path}.minimum cannot exceed maximum`);
-	if (typeof rule.minLength === "number" && typeof rule.maxLength === "number" && rule.minLength > rule.maxLength) throw new Error(`${path}.minLength cannot exceed maxLength`);
-	if (typeof rule.minItems === "number" && typeof rule.maxItems === "number" && rule.minItems > rule.maxItems) throw new Error(`${path}.minItems cannot exceed maxItems`);
-}
-function matchesType(value, type) {
-	switch (type) {
-		case "object": return asRecord(value) !== null;
-		case "array": return Array.isArray(value);
-		case "string": return typeof value === "string";
-		case "number": return typeof value === "number" && Number.isFinite(value);
-		case "integer": return typeof value === "number" && Number.isInteger(value);
-		case "boolean": return typeof value === "boolean";
-		case "null": return value === null;
-		default: return false;
-	}
-}
-function deepEqual(left, right) {
-	return JSON.stringify(left) === JSON.stringify(right);
-}
-function asRecord(value) {
-	return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
-}
-var SCHEMA_PROPERTY_TYPES = [
-	"object",
-	"array",
-	"string",
-	"number",
-	"integer",
-	"boolean",
-	"null"
-];
-var SCHEMA_ID_PATTERN = /^[a-z][a-z0-9.-]{0,127}$/u;
-/** Complete Semantic Version, matching the named-data schemaRef contract. */
-var SCHEMA_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*))*))?(?:\+([\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*))?$/u;
-function schemaKey(reference) {
-	return `${reference.id}@${reference.version}`;
-}
-function parseSchemaReference(rawId, rawVersion) {
-	const id = String(rawId).trim();
-	const version = String(rawVersion).trim();
-	if (!SCHEMA_ID_PATTERN.test(id)) throw new StructuredDataError("INVALID_SCHEMA", `Schema id must match ${SCHEMA_ID_PATTERN.source}: ${id}`, { schemaId: id });
-	if (!SCHEMA_VERSION_PATTERN.test(version)) throw new StructuredDataError("INVALID_SCHEMA", `Schema version must be a complete Semantic Version: ${version}`, {
-		schemaId: id,
-		schemaVersion: version
-	});
-	return {
-		id,
-		version
-	};
-}
-/** Reads a Schema document from JSON text and refuses malformed schemas before they are stored. */
-function parseSchemaDocument(text, reference) {
-	let document;
-	try {
-		document = parseJson(text);
-	} catch {
-		throw new StructuredDataError("INVALID_SCHEMA", "Schema must be valid JSON.", {
-			schemaId: reference.id,
-			schemaVersion: reference.version
-		});
-	}
-	return assertSchemaDocument(document, reference);
-}
-function assertSchemaDocument(document, reference) {
-	try {
-		validateSchemaDefinition(document, "schema");
-	} catch (error) {
-		throw new StructuredDataError("INVALID_SCHEMA", error instanceof Error ? error.message : String(error), {
-			schemaId: reference.id,
-			schemaVersion: reference.version
-		});
-	}
-	return document;
-}
-function schemaEntry(reference, document) {
-	return {
-		reference,
-		canonical: stringifyJson(document),
-		document
-	};
-}
-/**
-* Checks a whole candidate value and reports the first failure with the schema identity, the data
-* name, the failing path and the expectation. Callers validate the complete candidate before they
-* replace a binding, so a rejected update leaves the previous value in place.
-*/
-function assertValueMatchesSchema(value, entry, dataName) {
-	const [first] = validateAgainstSchema(value, entry.document);
-	if (first === void 0) return;
-	const { path, expected } = splitDiagnostic(first);
-	throw new StructuredDataError("SCHEMA_VALIDATION_FAILED", `Structured data ${dataName} does not match schema ${schemaKey(entry.reference)}: ${first}`, {
-		dataName,
-		schemaId: entry.reference.id,
-		schemaVersion: entry.reference.version,
-		path,
-		expected
-	});
-}
-function beginSchemaDraft(reference, additionalProperties) {
-	return {
-		reference,
-		additionalProperties,
-		properties: /* @__PURE__ */ new Map(),
-		required: /* @__PURE__ */ new Set()
-	};
-}
-function addDraftProperty(draft, rawProperty, rawType, required) {
-	const property = String(rawProperty).trim();
-	if (property.length === 0) throw new StructuredDataError("INVALID_SCHEMA", "Property name cannot be empty.", {
-		schemaId: draft.reference.id,
-		schemaVersion: draft.reference.version
-	});
-	const type = String(rawType).trim();
-	if (!SCHEMA_PROPERTY_TYPES.includes(type)) throw new StructuredDataError("INVALID_SCHEMA", `Property type must be one of ${SCHEMA_PROPERTY_TYPES.join(", ")}: ${type}`, {
-		schemaId: draft.reference.id,
-		schemaVersion: draft.reference.version,
-		path: `$.${property}`,
-		expected: SCHEMA_PROPERTY_TYPES.join(" or ")
-	});
-	draft.properties.set(property, type);
-	if (required) draft.required.add(property);
-	else draft.required.delete(property);
-}
-/**
-* Converts a draft to the same canonical document a text definition of the same shape produces.
-* Property order never matters: object keys are canonicalized and `required` is sorted.
-*/
-function draftToSchemaDocument(draft) {
-	const properties = {};
-	for (const [property, type] of draft.properties) properties[property] = { type };
-	const document = {
-		type: "object",
-		properties,
-		additionalProperties: draft.additionalProperties
-	};
-	if (draft.required.size > 0) document.required = [...draft.required].sort();
-	return document;
-}
-function parseAdditionalProperties(raw, reference) {
-	const value = String(raw).trim();
-	if (value === "allow") return true;
-	if (value === "reject") return false;
-	throw new StructuredDataError("INVALID_SCHEMA", `Extra properties must be allow or reject: ${value}`, {
-		schemaId: reference.id,
-		schemaVersion: reference.version,
-		expected: "allow or reject"
-	});
-}
-function parseRequiredFlag(raw, reference) {
-	const value = String(raw).trim();
-	if (value === "required") return true;
-	if (value === "optional") return false;
-	throw new StructuredDataError("INVALID_SCHEMA", `Property requirement must be required or optional: ${value}`, {
-		schemaId: reference.id,
-		schemaVersion: reference.version,
-		expected: "required or optional"
-	});
-}
-var DIAGNOSTIC_PREDICATES = [
-	" must be ",
-	" must have ",
-	" is required",
-	" is not allowed"
-];
-/**
-* Splits a shared-validator diagnostic into its path and expectation. The message text itself is
-* kept verbatim so a failure reads the same here as it does for a named function argument.
-*/
-function splitDiagnostic(message) {
-	const boundary = DIAGNOSTIC_PREDICATES.map((predicate) => message.indexOf(predicate)).filter((index) => index >= 0).sort((left, right) => left - right)[0];
-	if (boundary === void 0) return {
-		path: "$",
-		expected: message
-	};
-	return {
-		path: message.slice(0, boundary),
-		expected: message.slice(boundary + 1).replace(/^(?:must be|must have|is) /u, "")
-	};
-}
 var STRUCTURED_DATA_NAMESPACE = "structured";
 var STRUCTURED_BODY_MAX_BYTES = 262144;
 var StructuredDataNamedDataProvider = class {
@@ -1691,10 +1609,12 @@ var SCHEMA_OPCODES = /* @__PURE__ */ new Set([
 	"schemaOf"
 ]);
 var StructuredDataExtension = class {
-	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaEnabled = isStructuredSchemaEnabled()) {
+	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaEnabled = isStructuredSchemaEnabled(), documentSourceEnabled = isStructuredDocumentSourceEnabled()) {
 		this.scratch = scratch;
 		this.schemaEnabled = schemaEnabled;
+		this.documentSourceEnabled = documentSourceEnabled;
 		this.disposed = false;
+		this.sourceProjections = /* @__PURE__ */ new Set();
 		this.registries = /* @__PURE__ */ new WeakMap();
 		this.schemaRegistries = /* @__PURE__ */ new WeakMap();
 		this.schemaDrafts = /* @__PURE__ */ new WeakMap();
@@ -1703,13 +1623,12 @@ var StructuredDataExtension = class {
 		this.enabled = enabled;
 		this.unregisterSourceEditors = registerSourceEditors(this.scratch, enabled ? sourceEditorDefinitions : []);
 		const runtime = this.scratch.vm?.runtime;
-		const onDispose = () => {
-			this.dispose();
-		};
+		const onDispose = () => this.clearRuntimeState();
 		const onStop = () => this.clearRuntimeState();
 		this.releaseRuntimeListeners = () => {
 			runtime?.off?.("RUNTIME_DISPOSED", onDispose);
 			runtime?.off?.("PROJECT_STOP_ALL", onStop);
+			runtime?.off?.("PROJECT_LOADED", onStop);
 		};
 		let unregisterFixed = () => {};
 		try {
@@ -1725,6 +1644,8 @@ var StructuredDataExtension = class {
 					runtime.on?.("RUNTIME_DISPOSED", onDispose);
 				}
 			}
+			if (this.documentSourceEnabled && !namedDataEnabled) runtime?.on?.("RUNTIME_DISPOSED", onDispose);
+			if (this.documentSourceEnabled || namedDataEnabled) runtime?.on?.("PROJECT_LOADED", onStop);
 			runtime?.on?.("PROJECT_STOP_ALL", onStop);
 		} catch (error) {
 			this.releaseRuntimeListeners();
@@ -1735,6 +1656,20 @@ var StructuredDataExtension = class {
 			throw error;
 		}
 	}
+	/** Explicitly project preserved source into this extension's transient target bindings. */
+	createSourceProjection(documents) {
+		if (this.disposed || !this.enabled || !this.documentSourceEnabled) throw new StructuredDataError("DATA_NOT_FOUND", "Structured data is unavailable.");
+		const projection = createDocumentSourceProjection({
+			documents,
+			publish: (target, name, value, format) => this.store(target, name, value, format)
+		});
+		this.sourceProjections.add(projection);
+		return projection;
+	}
+	getSchemaResolver(target) {
+		this.requireSchemaSupport();
+		return createReadonlySchemaResolver((reference) => this.disposed ? void 0 : this.schemaRegistries.get(target)?.get(schemaKey(reference)));
+	}
 	getNamedDataProvider() {
 		return this.namedDataProvider;
 	}
@@ -1744,6 +1679,8 @@ var StructuredDataExtension = class {
 	async dispose() {
 		if (this.disposed) return;
 		this.disposed = true;
+		for (const projection of this.sourceProjections) projection.dispose();
+		this.sourceProjections.clear();
 		this.releaseRuntimeListeners();
 		this.unregisterFixedInputEditors();
 		this.unregisterSourceEditors();
@@ -1994,6 +1931,7 @@ var StructuredDataExtension = class {
 		return parsePath(this.scratch.Cast.toString(value));
 	}
 	clearRuntimeState() {
+		for (const projection of this.sourceProjections) projection.clear();
 		this.namedDataProvider?.clearSession();
 		this.registries = /* @__PURE__ */ new WeakMap();
 		this.schemaRegistries = /* @__PURE__ */ new WeakMap();

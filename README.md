@@ -76,7 +76,7 @@ schema id and version, failing path and expectation, so callers never parse the 
 ## Installation
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.10.0
+pnpm add --save-exact @kubohiroya/turbowarp-structured-data@0.11.0-rc.0
 ```
 
 ## Quick start
@@ -456,3 +456,8 @@ The contract the Schema describes is grounded in the actual `getInfo` declaratio
 Existing non-empty finite Number aliases for `MAX` (for example `001`, `+1`, or `0x10`) are only projected through `Number` for display; unchanged raw values are not saved again. Blank, non-finite, or unprojectable values are read-only, and no `0` or default is substituted. New input does not accept these aliases and follows NP-finite-new-input-v1.
 
 Registration uses the optional editor API available when the extension instance is constructed. Adding or replacing that API later is not followed automatically; reload the GUI and reconstruct the extension instance after changing the startup configuration.
+
+
+## Projection from persistent source documents
+
+The opt-in `./document-source` API reads a Document Data source document through its canonical reference and produces a structured runtime value. It uses the shared YAML/JSON codec and retains the original text, comments and line endings in Document Data. Failed parsing or Schema checks leave the previous value untouched; projecting a value never serializes it back over the source. The new `STRUCTURED_DOCUMENT_SOURCE` startup flag defaults to OFF alongside the existing `STRUCTURED_DATA_MVP` gate. Runtime projections are cleared on stop, while the owner's source document remains in SB3 storage. See the [source-document integration guide](docs/document-source.ja.md) for the API, revision guard and Schema reference boundary.

@@ -44,4 +44,5 @@ export interface IterationEntry {
     value: JsonValue;
 }
 export declare function iterationEntries(root: JsonValue, segments: readonly PathSegment[], maximum: number): IterationEntry[];
+export declare function cloneJson(value: JsonValue): JsonValue;
 export declare function compareUnicodeCodePoints(left: string, right: string): number;
