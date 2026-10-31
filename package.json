@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.11.0-rc.0",
+  "version": "0.11.0-rc.1",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": {
     "name": "Hiroya Kubo",
