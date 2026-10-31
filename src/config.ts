@@ -3,6 +3,7 @@ export const NAMED_DATA_REGISTRY_MVP_DEFAULT = false;
 export const NAMED_DATA_SCHEMA_REF_DEFAULT = false;
 export const STRUCTURED_SCHEMA_DEFAULT = false;
 export const STRUCTURED_DOCUMENT_SOURCE_DEFAULT = false;
+export const STRUCTURED_DOCUMENT_TREE_DEFAULT = false;
 
 export function isNamedDataSchemaRefEnabled(
   source: {__TW_NAMED_DATA_FEATURE_FLAGS__?: {NAMED_DATA_SCHEMA_REF?: unknown}} =
@@ -43,6 +44,14 @@ export function isStructuredDocumentSourceEnabled(
 ): boolean {
   const value = source.STRUCTURED_DOCUMENT_SOURCE;
   return value === undefined ? STRUCTURED_DOCUMENT_SOURCE_DEFAULT : value === true || value === 'true';
+}
+
+/** Read once by the extension constructor; the document tree copy block needs MVP and this flag. */
+export function isStructuredDocumentTreeEnabled(
+  source: {STRUCTURED_DOCUMENT_TREE?: unknown} = globalThis as {STRUCTURED_DOCUMENT_TREE?: unknown}
+): boolean {
+  const value = source.STRUCTURED_DOCUMENT_TREE;
+  return value === undefined ? STRUCTURED_DOCUMENT_TREE_DEFAULT : value === true || value === 'true';
 }
 
 export const extensionConfig = {

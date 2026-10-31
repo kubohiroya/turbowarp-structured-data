@@ -12,6 +12,7 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     private readonly scratch;
     private readonly schemaEnabled;
     private readonly documentSourceEnabled;
+    private readonly documentTreeEnabled;
     private readonly enabled;
     private disposed;
     private readonly releaseRuntimeListeners;
@@ -27,7 +28,7 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     private readonly namedDataRegistry?;
     private readonly namedDataRegistration?;
     private readonly unbindNamedDataRegistryLifecycle?;
-    constructor(scratch: ScratchApi, enabled?: boolean, namedDataEnabled?: boolean, schemaEnabled?: boolean, documentSourceEnabled?: boolean);
+    constructor(scratch: ScratchApi, enabled?: boolean, namedDataEnabled?: boolean, schemaEnabled?: boolean, documentSourceEnabled?: boolean, documentTreeEnabled?: boolean);
     /** Explicitly project preserved source into this extension's transient target bindings. */
     createSourceProjection(documents: SourceDocumentRegistry): Readonly<{
         project(target: object, name: string, reference: import("@kubohiroya/turbowarp-document-data/composition").SourceDocumentReference): import("./document-source.js").SourceProjection;
@@ -55,6 +56,17 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     }, util: ScratchBlockUtility): void;
     parseYaml(args: {
         TEXT: unknown;
+        NAME: unknown;
+    }, util: ScratchBlockUtility): void;
+    /**
+     * Copies a Document Data subtree into a named value exactly as `parse JSON` binds one: the same
+     * target-local name, replacement, stop-time clearing, and a schema the old value carried is dropped.
+     * Every check and the copy finish before the binding changes, so a failure keeps the old value.
+     */
+    copyDocumentTree(args: {
+        DOCUMENT: unknown;
+        LOCATION: unknown;
+        POSITIONS: unknown;
         NAME: unknown;
     }, util: ScratchBlockUtility): void;
     toJson(args: {
@@ -139,6 +151,7 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     private requireSchema;
     private requireDraft;
     private schemaRegistryFor;
+    private requireDocumentTreeSupport;
     private requireSchemaSupport;
     private schemaNotFound;
     private store;

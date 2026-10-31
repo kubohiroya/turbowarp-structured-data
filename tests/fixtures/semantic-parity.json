@@ -2,6 +2,7 @@
   "schemaVersion": 2,
   "manifestFormatVersion": 3,
   "dataReference": {"kind": "named", "scope": "target", "lifetime": "untilProjectStop"},
+  "serverUnsupportedOpcodes": ["copyDocumentTree"],
   "cases": [
     {"name": "parse canonical JSON", "format": "json", "text": "{\"z\":0,\"a\":{\"d\":4,\"b\":2}}", "dataName": "document", "expectedJson": "{\"a\":{\"b\":2,\"d\":4},\"z\":0}"},
     {"name": "parse YAML", "format": "yaml", "text": "name: sensor\nenabled: true", "dataName": "document", "expectedJson": "{\"enabled\":true,\"name\":\"sensor\"}"},

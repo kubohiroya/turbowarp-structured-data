@@ -25,7 +25,9 @@ interface ReadCase {
 }
 
 const blockByOperation = new Map(
-  definitions.blocks.map((block) => [block.server.irOperation, block])
+  definitions.blocks
+    .filter((block) => block.server.supported)
+    .map((block) => [block.server.irOperation, block])
 );
 
 beforeEach(() => {
@@ -103,6 +105,19 @@ describe('browser/server semantic parity fixture', () => {
         expect(expected, label).toBeTypeOf('string');
         expect(read(), label).toBe(expected);
       }
+    }
+  });
+
+  it('names the browser-only blocks a server adapter must reject', () => {
+    const unsupported = definitions.blocks.filter((block) => !block.server.supported);
+
+    // Document Data runs only in the browser, so the server cannot copy document trees.
+    expect(fixture.serverUnsupportedOpcodes).toEqual(unsupported.map((block) => block.opcode));
+    for (const block of unsupported) expect(block.server, block.opcode).toEqual({supported: false});
+    for (const testCase of fixture.readCases) {
+      expect(fixture.serverUnsupportedOpcodes, testCase.name).not.toContain(
+        blockByOperation.get(testCase.operation)?.opcode
+      );
     }
   });
 });

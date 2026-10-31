@@ -1,5 +1,6 @@
-import {isStructuredDocumentSourceEnabled} from './config.js';
+import {isStructuredDocumentSourceEnabled, isStructuredDocumentTreeEnabled} from './config.js';
 import {createDocumentSourceProjection, createReadonlySchemaResolver} from './document-source.js';
+import {copyDocumentTree, parseDocumentTreePositions} from './document-tree.js';
 import type {SourceDocumentRegistry} from '@kubohiroya/turbowarp-document-data/composition';
 import type {ScratchApi, TurboWarpExtension, ScratchBlockUtility} from './runtime-api.js';
 import {fixedInputEditorDefinitions, registerFixedInputEditors} from './fixed-input-editors.js';
@@ -66,6 +67,12 @@ type ArgumentTypeName = 'STRING' | 'NUMBER';
 interface DefinitionArgument {
   type: ArgumentTypeName;
   defaultValue: string | number;
+  menu?: string;
+}
+
+interface MenuDefinition {
+  acceptReporters: boolean;
+  items: readonly string[];
 }
 
 interface BlockDefinition {
@@ -93,6 +100,7 @@ interface ActiveIteration extends IterationEntry {
 
 const LOOP_STATE = 'structuredDataLoopState';
 const blockDefinitions = definitions.blocks as readonly BlockDefinition[];
+const menuDefinitions = definitions.menus as Readonly<Record<string, MenuDefinition>>;
 
 /** Blocks that only appear while the startup-fixed schema flag is on. */
 const SCHEMA_OPCODES: ReadonlySet<string> = new Set([
@@ -106,6 +114,9 @@ const SCHEMA_OPCODES: ReadonlySet<string> = new Set([
   'parseYamlWithSchema',
   'schemaOf'
 ]);
+
+/** Blocks that only appear while the startup-fixed document tree flag is on. */
+const DOCUMENT_TREE_OPCODES: ReadonlySet<string> = new Set(['copyDocumentTree']);
 
 export class StructuredDataExtension implements TurboWarpExtension {
   private readonly enabled: boolean;
@@ -129,7 +140,8 @@ export class StructuredDataExtension implements TurboWarpExtension {
     enabled = isStructuredDataMvpEnabled(),
     namedDataEnabled = isNamedDataRegistryMvpEnabled(),
     private readonly schemaEnabled = isStructuredSchemaEnabled(),
-    private readonly documentSourceEnabled = isStructuredDocumentSourceEnabled()
+    private readonly documentSourceEnabled = isStructuredDocumentSourceEnabled(),
+    private readonly documentTreeEnabled = isStructuredDocumentTreeEnabled()
   ) {
     this.enabled = enabled;
     this.unregisterSourceEditors = registerSourceEditors(this.scratch, enabled ? sourceEditorDefinitions : []);
@@ -211,16 +223,29 @@ export class StructuredDataExtension implements TurboWarpExtension {
   }
 
   public getInfo(): Record<string, unknown> {
+    const visible = this.enabled
+      ? blockDefinitions.filter(
+          (block) =>
+            (this.schemaEnabled || !SCHEMA_OPCODES.has(block.opcode)) &&
+            (this.documentTreeEnabled || !DOCUMENT_TREE_OPCODES.has(block.opcode))
+        )
+      : [];
+    const menuIds = new Set(
+      visible.flatMap((block) => Object.values(block.arguments).flatMap((argument) => argument.menu ?? []))
+    );
     return {
       id: extensionConfig.id,
       name: this.scratch.translate(definitions.extensionName),
       docsURI: extensionConfig.docsURI,
       blockIconURI: extensionConfig.blockIconURI,
-      blocks: this.enabled
-        ? blockDefinitions
-            .filter((block) => this.schemaEnabled || !SCHEMA_OPCODES.has(block.opcode))
-            .map((block) => this.toScratchBlock(block))
-        : []
+      blocks: visible.map((block) => this.toScratchBlock(block)),
+      menus: Object.fromEntries(
+        [...menuIds].map((id) => {
+          const menu = menuDefinitions[id];
+          if (!menu) throw new Error(`Unknown menu: ${id}`);
+          return [id, {acceptReporters: menu.acceptReporters, items: [...menu.items]}];
+        })
+      )
     };
   }
 
@@ -240,6 +265,31 @@ export class StructuredDataExtension implements TurboWarpExtension {
       parseYamlDocument(this.scratch.Cast.toString(args.TEXT)),
       'yaml'
     );
+  }
+
+  /**
+   * Copies a Document Data subtree into a named value exactly as `parse JSON` binds one: the same
+   * target-local name, replacement, stop-time clearing, and a schema the old value carried is dropped.
+   * Every check and the copy finish before the binding changes, so a failure keeps the old value.
+   */
+  public copyDocumentTree(
+    args: {DOCUMENT: unknown; LOCATION: unknown; POSITIONS: unknown; NAME: unknown},
+    util: ScratchBlockUtility
+  ): void {
+    this.requireDocumentTreeSupport();
+    const name = this.name(args.NAME);
+    const documentName = this.scratch.Cast.toString(args.DOCUMENT).trim();
+    if (documentName.length === 0) {
+      throw new StructuredDataError('INVALID_NAME', 'Document name cannot be empty.');
+    }
+    const value = copyDocumentTree({
+      scope: this.scratch.vm,
+      target: util.target,
+      documentName,
+      location: this.scratch.Cast.toString(args.LOCATION),
+      positions: parseDocumentTreePositions(this.scratch.Cast.toString(args.POSITIONS))
+    });
+    this.setBinding(util.target, name, value, 'json');
   }
 
   public toJson(args: {NAME: unknown}, util: ScratchBlockUtility): string {
@@ -509,6 +559,14 @@ export class StructuredDataExtension implements TurboWarpExtension {
     return registry;
   }
 
+  private requireDocumentTreeSupport(): void {
+    if (this.enabled && this.documentTreeEnabled) return;
+    throw new StructuredDataError(
+      'DATA_NOT_FOUND',
+      'Copying document trees is off; set STRUCTURED_DATA_MVP and STRUCTURED_DOCUMENT_TREE before the extension loads.'
+    );
+  }
+
   private requireSchemaSupport(): void {
     if (this.schemaEnabled) return;
     throw new StructuredDataError(
@@ -637,7 +695,11 @@ export class StructuredDataExtension implements TurboWarpExtension {
       arguments: Object.fromEntries(
         Object.entries(block.arguments).map(([name, argument]) => [
           name,
-          {type: this.scratch.ArgumentType[argument.type], defaultValue: argument.defaultValue}
+          {
+            type: this.scratch.ArgumentType[argument.type],
+            defaultValue: argument.defaultValue,
+            ...(argument.menu === undefined ? {} : {menu: argument.menu})
+          }
         ])
       )
     };

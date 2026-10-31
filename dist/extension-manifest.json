@@ -93,6 +93,43 @@
       }
     },
     {
+      "opcode": "copyDocumentTree",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "DOCUMENT",
+          "type": "STRING"
+        },
+        {
+          "id": "LOCATION",
+          "type": "STRING"
+        },
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "POSITIONS",
+          "type": "STRING",
+          "menu": "documentTreePositions"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "PARSE_LIMIT_EXCEEDED"
+      ],
+      "server": {
+        "supported": false
+      }
+    },
+    {
       "opcode": "currentIndex",
       "blockType": "REPORTER",
       "arguments": [],
@@ -748,5 +785,10 @@
       }
     }
   ],
-  "menus": []
+  "menus": [
+    {
+      "id": "documentTreePositions",
+      "acceptReporters": false
+    }
+  ]
 }

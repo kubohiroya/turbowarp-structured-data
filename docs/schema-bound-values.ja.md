@@ -9,7 +9,7 @@ Schemaを指定しない値は従来どおり自由なJSON valueとして扱い�
 
 `STRUCTURED_SCHEMA`は起動時固定で既定`false`である。TurboWarpページのcontextで
 `globalThis.STRUCTURED_SCHEMA = true`を設定してから`dist/structured-data.js`を読み込むと、
-Schema関連の9 blockが追加される。OFFのままなら公開blockはSchema以外の19個で、
+Schema関連の9 blockが追加される。OFFのままなら公開blockは中核の19個（`STRUCTURED_DOCUMENT_TREE`有効時は20個）で、
 `parseJson`/`parseYaml`/path操作/反復の意味論は一切変わらない。
 既存bindingはschemaRefを要求しないので、flagをOFFに戻して再読込すれば現行動作へ戻る。
 OFFの状態でSchema blockが呼ばれた場合は`INVALID_SCHEMA`で明示的に拒否し、暗黙に無視しない。

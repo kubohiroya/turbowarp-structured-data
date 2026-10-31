@@ -1,5 +1,8 @@
 {
   "extensionName": "Structured Data",
+  "menus": {
+    "documentTreePositions": {"acceptReporters": false, "items": ["without positions", "with positions"]}
+  },
   "blocks": [
     {
       "opcode": "parseJson", "blockType": "COMMAND", "text": "parse JSON [TEXT] as [NAME]", "description": "Parse JSON text into the target-local structured data namespace.",
@@ -12,6 +15,12 @@
       "arguments": {"TEXT": {"type": "STRING", "defaultValue": "name: TurboWarp"}, "NAME": {"type": "STRING", "defaultValue": "data"}},
       "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_YAML", "INVALID_NAME", "PARSE_LIMIT_EXCEEDED"],
       "server": {"supported": true, "irOperation": "structuredData.parseYaml"}
+    },
+    {
+      "opcode": "copyDocumentTree", "blockType": "COMMAND", "text": "copy document [DOCUMENT] at [LOCATION] [POSITIONS] as [NAME]", "description": "Copy a Document Data document, or the part at a location, into the target-local structured data namespace.",
+      "arguments": {"DOCUMENT": {"type": "STRING", "defaultValue": "page"}, "LOCATION": {"type": "STRING", "defaultValue": "$"}, "POSITIONS": {"type": "STRING", "defaultValue": "without positions", "menu": "documentTreePositions"}, "NAME": {"type": "STRING", "defaultValue": "tree"}},
+      "resultType": "void", "effect": "state", "immutable": true, "errors": ["INVALID_NAME", "DATA_NOT_FOUND", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "PARSE_LIMIT_EXCEEDED"],
+      "server": {"supported": false}
     },
     {
       "opcode": "toJson", "blockType": "REPORTER", "text": "to JSON [NAME]", "description": "Render named structured data as canonical JSON.",
