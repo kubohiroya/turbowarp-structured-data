@@ -70,6 +70,7 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
         NAME: unknown;
     }, util: ScratchBlockUtility): void;
     getJsonAtPath(args: NamedPathArguments, util: ScratchBlockUtility): string;
+    getTextAtPath(args: NamedPathArguments, util: ScratchBlockUtility): string;
     hasPath(args: NamedPathArguments, util: ScratchBlockUtility): boolean;
     setJsonAtPath(args: NamedPathArguments & {
         VALUE: unknown;
@@ -83,6 +84,12 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     currentKey(_args: Record<string, never>, util: ScratchBlockUtility): string;
     currentIndex(_args: Record<string, never>, util: ScratchBlockUtility): number;
     currentValueJson(_args: Record<string, never>, util: ScratchBlockUtility): string;
+    currentJsonAtPath(args: {
+        PATH: unknown;
+    }, util: ScratchBlockUtility): string;
+    currentTextAtPath(args: {
+        PATH: unknown;
+    }, util: ScratchBlockUtility): string;
     defineSchema(args: {
         SCHEMA_ID: unknown;
         VERSION: unknown;
@@ -142,6 +149,8 @@ export declare class StructuredDataExtension implements TurboWarpExtension {
     private name;
     private dataNotFound;
     private currentIteration;
+    /** Reads a path relative to the innermost entry; the loop context is checked before the path. */
+    private currentValueAt;
     private stackFor;
     private path;
     private clearRuntimeState;

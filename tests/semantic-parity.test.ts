@@ -2,10 +2,31 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import * as namedFunctions from '@kubohiroya/turbowarp-named-functions/composition';
 import fixture from './fixtures/semantic-parity.json';
 import schemaFixture from './fixtures/schema-parity.json';
+import definitions from '../src/block-definitions.json';
 import {StructuredDataExtension} from '../src/extension.js';
 import {renderYamlDocument} from '../src/codecs.js';
 import {parsePath, stringifyJson, type JsonValue} from '../src/core.js';
 import {SCHEMA_SUBSET_KEYWORDS} from '../src/schema.js';
+import type {ScratchBlockUtility} from '../src/runtime-api.js';
+
+/** A reporter read after parsing and, optionally, after entering nested loops at given entries. */
+interface ReadCase {
+  name: string;
+  format: string;
+  text: string;
+  dataName: string;
+  loops?: Array<{path: string; entry: number}>;
+  operation: string;
+  readName?: string;
+  path: string;
+  expectedJson?: string;
+  expectedText?: string;
+  error?: string;
+}
+
+const blockByOperation = new Map(
+  definitions.blocks.map((block) => [block.server.irOperation, block])
+);
 
 beforeEach(() => {
   vi.stubGlobal('Scratch', {
@@ -43,7 +64,70 @@ describe('browser/server semantic parity fixture', () => {
       }
     }
   });
+
+  it('reads text and current-entry paths with the same results and errors', () => {
+    for (const testCase of fixture.readCases as readonly ReadCase[]) {
+      const label = testCase.name;
+      const extension = new StructuredDataExtension(Scratch, true);
+      const target = {};
+      const thread = {};
+      const util = () => ({target, thread, stackFrame: {}, startBranch: vi.fn()});
+      const setup = util();
+      if (testCase.format === 'json') {
+        extension.parseJson({TEXT: testCase.text, NAME: testCase.dataName}, setup);
+      } else {
+        extension.parseYaml({TEXT: testCase.text, NAME: testCase.dataName}, setup);
+      }
+      // Each loop level keeps its own frame on the shared thread, as nested TurboWarp loops do.
+      for (const loop of testCase.loops ?? []) {
+        const frame = util();
+        for (let step = 0; step <= loop.entry; step += 1) {
+          extension.forEachAtPath({NAME: testCase.dataName, PATH: loop.path, MAX: 100}, frame);
+        }
+        expect(frame.startBranch, label).toHaveBeenCalledTimes(loop.entry + 1);
+      }
+      const block = blockByOperation.get(testCase.operation);
+      if (!block) throw new Error(`${label}: unknown operation ${testCase.operation}`);
+      const read = () =>
+        readAt(
+          extension,
+          block.opcode,
+          {NAME: testCase.readName ?? testCase.dataName, PATH: testCase.path},
+          util()
+        );
+      if (testCase.error !== undefined) {
+        expect(block.errors, label).toContain(testCase.error);
+        expect(read, label).toThrowError(expect.objectContaining({code: testCase.error}));
+      } else {
+        const expected = block.resultType === 'string' ? testCase.expectedText : testCase.expectedJson;
+        expect(expected, label).toBeTypeOf('string');
+        expect(read(), label).toBe(expected);
+      }
+    }
+  });
 });
+
+function readAt(
+  extension: StructuredDataExtension,
+  opcode: string,
+  args: {NAME: string; PATH: string},
+  util: ScratchBlockUtility
+): string {
+  switch (opcode) {
+    case 'getJsonAtPath':
+      return extension.getJsonAtPath(args, util);
+    case 'getTextAtPath':
+      return extension.getTextAtPath(args, util);
+    case 'currentValueJson':
+      return extension.currentValueJson({}, util);
+    case 'currentJsonAtPath':
+      return extension.currentJsonAtPath({PATH: args.PATH}, util);
+    case 'currentTextAtPath':
+      return extension.currentTextAtPath({PATH: args.PATH}, util);
+    default:
+      throw new Error(`No browser reader for ${opcode}`);
+  }
+}
 
 describe('browser/server schema parity fixture', () => {
   it('reads the same Schema subset as named function arguments and returns', () => {

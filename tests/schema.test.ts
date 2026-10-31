@@ -78,14 +78,14 @@ describe('the schema flag', () => {
     const opcodes = (
       new StructuredDataExtension(Scratch, true).getInfo() as {blocks: Array<{opcode: string}>}
     ).blocks.map((block) => block.opcode);
-    expect(opcodes).toHaveLength(16);
+    expect(opcodes).toHaveLength(19);
     expect(opcodes).not.toContain('parseJsonWithSchema');
 
     const withFlag = (withSchema().getInfo() as {blocks: Array<{opcode: string}>}).blocks.map(
       (block) => block.opcode
     );
-    expect(withFlag).toHaveLength(25);
-    expect(withFlag.slice(16)).toEqual([
+    expect(withFlag).toHaveLength(28);
+    expect(withFlag.slice(19)).toEqual([
       'defineSchema', 'beginSchema', 'addSchemaProperty', 'commitSchema', 'hasSchema',
       'deleteSchema', 'parseJsonWithSchema', 'parseYamlWithSchema', 'schemaOf'
     ]);

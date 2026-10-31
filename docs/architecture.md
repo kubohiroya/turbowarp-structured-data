@@ -11,7 +11,7 @@ bindings and open bodies but retains the provider registration for the next proj
 
 The extension owns a `WeakMap<Target, Map<Name, JsonValue>>`. Names are trimmed, non-empty strings. A sprite and the stage have separate namespaces. Parsing replaces a binding atomically; path updates construct a new JSON value and replace the binding only after validation succeeds. `PROJECT_STOP_ALL` replaces the registries and iteration stacks, so runtime state does not survive a project stop.
 
-JSON values are `null`, booleans, finite numbers, strings, arrays, and objects with own enumerable properties. They never cross the public block boundary as opaque internal tokens. JSON/YAML text appears only at parse, render, set-value, get-value, keys, and current-value boundaries required by Scratch reporter types.
+JSON values are `null`, booleans, finite numbers, strings, arrays, and objects with own enumerable properties. They never cross the public block boundary as opaque internal tokens. JSON/YAML text appears only at parse, render, set-value, get-value, keys, and current-value boundaries required by Scratch reporter types. The text reporters (`text from … at path`, `current text at path`) return a string as is and a number or boolean as its canonical JSON text; null, arrays, and objects fail with `TYPE_MISMATCH` instead of becoming text.
 
 ## Codecs and limits
 
@@ -21,10 +21,10 @@ Canonical JSON recursively sorts object keys by Unicode code point. YAML uses th
 
 ## Paths and iteration
 
-`src/core.ts` converts restricted string paths to typed key/index segments and implements immutable get, has, set, delete, keys, length, and iteration entry generation. Loop entry snapshots are deterministic. Active loop frames are held in a separate `WeakMap` keyed by TurboWarp thread; nested loops form a stack.
+`src/core.ts` converts restricted string paths to typed key/index segments and implements immutable get, has, set, delete, keys, length, and iteration entry generation. Loop entry snapshots are deterministic. Active loop frames are held in a separate `WeakMap` keyed by TurboWarp thread; nested loops form a stack. `current value at path` and `current text at path` apply a path to the value of the top frame, so they read the innermost loop; with no frame they fail with `ITERATION_CONTEXT_REQUIRED` before the path is parsed.
 
 ## Compiler manifest v3
 
 The manifest declares a named reference with target scope, lifetime until project stop, and `jsonValue` contents. Each opcode provides arguments, result type, effect (`pure`, `state`, or `control`), possible errors, and its IR v2 operation. Server adapters must provide an equivalent target-local slot environment and reject unsupported manifest versions.
 
-`tests/fixtures/semantic-parity.json` is the portable browser/server contract for namespace, codec, path, result, and error semantics.
+`tests/fixtures/semantic-parity.json` is the portable browser/server contract for namespace, codec, path, result, and error semantics. Its `cases` parse, optionally update, and render a value; its `readCases` name a reporter by IR operation (`structuredData.getText`, `structuredData.currentGet`, `structuredData.currentGetText`, and their JSON counterparts), optionally enter nested loops at given entries first, and expect text, JSON, or an error code.

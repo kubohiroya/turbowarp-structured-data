@@ -108,6 +108,31 @@
       }
     },
     {
+      "opcode": "currentJsonAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "jsonText",
+      "effect": "control",
+      "immutable": true,
+      "errors": [
+        "ITERATION_CONTEXT_REQUIRED",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.currentGet"
+      }
+    },
+    {
       "opcode": "currentKey",
       "blockType": "REPORTER",
       "arguments": [],
@@ -120,6 +145,31 @@
       "server": {
         "supported": true,
         "irOperation": "structuredData.currentKey"
+      }
+    },
+    {
+      "opcode": "currentTextAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "string",
+      "effect": "control",
+      "immutable": true,
+      "errors": [
+        "ITERATION_CONTEXT_REQUIRED",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.currentGetText"
       }
     },
     {
@@ -308,6 +358,36 @@
       "server": {
         "supported": true,
         "irOperation": "structuredData.get"
+      }
+    },
+    {
+      "opcode": "getTextAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "string",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.getText"
       }
     },
     {

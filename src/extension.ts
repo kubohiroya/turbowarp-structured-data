@@ -48,6 +48,7 @@ import {
   lengthAtPath,
   parseJson as parseJsonValue,
   parsePath,
+  scalarToText,
   setAtPath,
   stringifyJson,
   StructuredDataError,
@@ -265,6 +266,12 @@ export class StructuredDataExtension implements TurboWarpExtension {
     );
   }
 
+  public getTextAtPath(args: NamedPathArguments, util: ScratchBlockUtility): string {
+    return scalarToText(
+      getAtPath(this.requireData(util.target, args.NAME), this.path(args.PATH))
+    );
+  }
+
   public hasPath(args: NamedPathArguments, util: ScratchBlockUtility): boolean {
     return hasAtPath(this.requireData(util.target, args.NAME), this.path(args.PATH));
   }
@@ -349,6 +356,14 @@ export class StructuredDataExtension implements TurboWarpExtension {
 
   public currentValueJson(_args: Record<string, never>, util: ScratchBlockUtility): string {
     return stringifyJson(this.currentIteration(util.thread).value);
+  }
+
+  public currentJsonAtPath(args: {PATH: unknown}, util: ScratchBlockUtility): string {
+    return stringifyJson(this.currentValueAt(util.thread, args.PATH));
+  }
+
+  public currentTextAtPath(args: {PATH: unknown}, util: ScratchBlockUtility): string {
+    return scalarToText(this.currentValueAt(util.thread, args.PATH));
   }
 
   public defineSchema(
@@ -583,6 +598,12 @@ export class StructuredDataExtension implements TurboWarpExtension {
       );
     }
     return current;
+  }
+
+  /** Reads a path relative to the innermost entry; the loop context is checked before the path. */
+  private currentValueAt(thread: object, rawPath: unknown): JsonValue {
+    const {value} = this.currentIteration(thread);
+    return getAtPath(value, this.path(rawPath));
   }
 
   private stackFor(thread: object): ActiveIteration[] {
