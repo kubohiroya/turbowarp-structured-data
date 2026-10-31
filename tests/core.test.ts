@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {
   deleteAtPath, getAtPath, hasAtPath, iterationEntries, keysAtPath, normalizeJson,
-  parseJson, parsePath, setAtPath, stringifyJson
+  parseJson, parsePath, scalarToText, setAtPath, stringifyJson
 } from '../src/core.js';
 
 describe('structured data core', () => {
@@ -53,6 +53,22 @@ describe('structured data core', () => {
     const value = parseJson('{"z":0,"a":1}');
     expect(keysAtPath(value, [])).toEqual(['a', 'z']);
     expect(iterationEntries(value, [], 2).map((entry) => entry.key)).toEqual(['a', 'z']);
+  });
+
+  it('renders scalars as text and rejects values without a text form', () => {
+    expect(scalarToText('Apple')).toBe('Apple');
+    expect(scalarToText('')).toBe('');
+    expect(scalarToText('line\n"quoted"')).toBe('line\n"quoted"');
+    expect(scalarToText(3)).toBe('3');
+    expect(scalarToText(parseJson('1e3'))).toBe('1000');
+    expect(scalarToText(parseJson('-0'))).toBe('0');
+    expect(scalarToText(true)).toBe('true');
+    expect(scalarToText(false)).toBe('false');
+    for (const value of [null, [], ['a'], {}, {a: 'b'}]) {
+      expect(() => scalarToText(value)).toThrowError(
+        expect.objectContaining({code: 'TYPE_MISMATCH'})
+      );
+    }
   });
 
   it.each([

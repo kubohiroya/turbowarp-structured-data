@@ -32,6 +32,12 @@ export declare function parseJson(text: unknown): JsonValue;
 export declare function isValidJson(text: unknown): boolean;
 export declare function normalizeJson(text: unknown): string;
 export declare function stringifyJson(value: JsonValue): string;
+/**
+ * Renders a value for the text reporters. A string is returned as is, without JSON quotes or
+ * escapes; a number or boolean uses its canonical JSON text. Null, arrays, and objects have no
+ * text form and fail instead of becoming an empty or JSON string.
+ */
+export declare function scalarToText(value: JsonValue): string;
 export declare function parsePath(input: unknown): PathSegment[];
 export declare function getAtPath(root: JsonValue, segments: readonly PathSegment[]): JsonValue;
 export declare function hasAtPath(root: JsonValue, segments: readonly PathSegment[]): boolean;

@@ -6734,6 +6734,16 @@ function stringifyJson(value) {
 	if (isJsonObject(value)) return `{${Object.keys(value).sort(compareUnicodeCodePoints).map((key) => `${JSON.stringify(key)}:${stringifyJson(value[key])}`).join(",")}}`;
 	return JSON.stringify(value);
 }
+/**
+* Renders a value for the text reporters. A string is returned as is, without JSON quotes or
+* escapes; a number or boolean uses its canonical JSON text. Null, arrays, and objects have no
+* text form and fail instead of becoming an empty or JSON string.
+*/
+function scalarToText(value) {
+	if (typeof value === "string") return value;
+	if (typeof value === "number" || typeof value === "boolean") return stringifyJson(value);
+	return typeMismatch(`Text requires a string, number, or boolean; found ${value === null ? "null" : Array.isArray(value) ? "an array" : "an object"}.`);
+}
 function parsePath(input) {
 	const path = String(input);
 	if (!path.startsWith("$")) invalidPath();
@@ -7807,6 +7817,38 @@ var block_definitions_default = {
 			}
 		},
 		{
+			"opcode": "getTextAtPath",
+			"blockType": "REPORTER",
+			"text": "text from [NAME] at path [PATH]",
+			"description": "Return a string, number, or boolean at a path as text; strings have no JSON quotes.",
+			"arguments": {
+				"NAME": {
+					"type": "STRING",
+					"defaultValue": "data"
+				},
+				"PATH": {
+					"type": "STRING",
+					"defaultValue": "$.name",
+					"normalizesTo": "pathSegments"
+				}
+			},
+			"resultType": "string",
+			"effect": "pure",
+			"immutable": true,
+			"errors": [
+				"INVALID_NAME",
+				"DATA_NOT_FOUND",
+				"INVALID_PATH",
+				"PATH_NOT_FOUND",
+				"TYPE_MISMATCH",
+				"INDEX_OUT_OF_RANGE"
+			],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.getText"
+			}
+		},
+		{
 			"opcode": "hasPath",
 			"blockType": "BOOLEAN",
 			"text": "structured data [NAME] has path [PATH]?",
@@ -8054,6 +8096,56 @@ var block_definitions_default = {
 			"server": {
 				"supported": true,
 				"irOperation": "structuredData.currentValue"
+			}
+		},
+		{
+			"opcode": "currentJsonAtPath",
+			"blockType": "REPORTER",
+			"text": "current value at path [PATH]",
+			"description": "Return the value at a path inside the current iteration value as JSON.",
+			"arguments": { "PATH": {
+				"type": "STRING",
+				"defaultValue": "$",
+				"normalizesTo": "pathSegments"
+			} },
+			"resultType": "jsonText",
+			"effect": "control",
+			"immutable": true,
+			"errors": [
+				"ITERATION_CONTEXT_REQUIRED",
+				"INVALID_PATH",
+				"PATH_NOT_FOUND",
+				"TYPE_MISMATCH",
+				"INDEX_OUT_OF_RANGE"
+			],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.currentGet"
+			}
+		},
+		{
+			"opcode": "currentTextAtPath",
+			"blockType": "REPORTER",
+			"text": "current text at path [PATH]",
+			"description": "Return a string, number, or boolean at a path inside the current iteration value as text.",
+			"arguments": { "PATH": {
+				"type": "STRING",
+				"defaultValue": "$",
+				"normalizesTo": "pathSegments"
+			} },
+			"resultType": "string",
+			"effect": "control",
+			"immutable": true,
+			"errors": [
+				"ITERATION_CONTEXT_REQUIRED",
+				"INVALID_PATH",
+				"PATH_NOT_FOUND",
+				"TYPE_MISMATCH",
+				"INDEX_OUT_OF_RANGE"
+			],
+			"server": {
+				"supported": true,
+				"irOperation": "structuredData.currentGetText"
 			}
 		},
 		{
@@ -8872,6 +8964,9 @@ var StructuredDataExtension = class {
 	getJsonAtPath(args, util) {
 		return stringifyJson(getAtPath(this.requireData(util.target, args.NAME), this.path(args.PATH)));
 	}
+	getTextAtPath(args, util) {
+		return scalarToText(getAtPath(this.requireData(util.target, args.NAME), this.path(args.PATH)));
+	}
 	hasPath(args, util) {
 		return hasAtPath(this.requireData(util.target, args.NAME), this.path(args.PATH));
 	}
@@ -8929,6 +9024,12 @@ var StructuredDataExtension = class {
 	}
 	currentValueJson(_args, util) {
 		return stringifyJson(this.currentIteration(util.thread).value);
+	}
+	currentJsonAtPath(args, util) {
+		return stringifyJson(this.currentValueAt(util.thread, args.PATH));
+	}
+	currentTextAtPath(args, util) {
+		return scalarToText(this.currentValueAt(util.thread, args.PATH));
 	}
 	defineSchema(args, util) {
 		this.requireSchemaSupport();
@@ -9071,6 +9172,11 @@ var StructuredDataExtension = class {
 		const current = this.iterationStacks.get(thread)?.at(-1);
 		if (!current) throw new StructuredDataError("ITERATION_CONTEXT_REQUIRED", "This reporter is only valid inside an active iteration.");
 		return current;
+	}
+	/** Reads a path relative to the innermost entry; the loop context is checked before the path. */
+	currentValueAt(thread, rawPath) {
+		const { value } = this.currentIteration(thread);
+		return getAtPath(value, this.path(rawPath));
 	}
 	stackFor(thread) {
 		let stack = this.iterationStacks.get(thread);

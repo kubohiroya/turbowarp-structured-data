@@ -25,6 +25,7 @@ Run `pnpm run samples:build` after source/bundle changes and `pnpm run samples:c
 - parses JSON or YAML into a target-local named namespace;
 - renders named data as canonical JSON or deterministic YAML;
 - reads, detects, immutably updates, and deletes values with a restricted path grammar;
+- reads strings, numbers, and booleans as plain text, so a string comes back without JSON quotes;
 - lists sorted object keys, reports array lengths, and performs bounded deterministic iteration;
 - emits a machine-readable compiler manifest and browser/server parity fixtures.
 
@@ -52,7 +53,7 @@ immediately return to metadata without schema identities.
 
 `STRUCTURED_SCHEMA` is a separate startup-fixed flag, also defaulting to `false`. Set
 `globalThis.STRUCTURED_SCHEMA = true` before loading the extension to add nine schema blocks; with
-the flag off the extension publishes the same sixteen blocks and the same semantics as before, and
+the flag off the extension publishes only the nineteen non-schema blocks, with the same semantics, and
 a schema block that a saved project still calls fails with `INVALID_SCHEMA` rather than being
 ignored. Existing bindings never require a `schemaRef`, so turning the flag off and reloading is
 the immediate rollback.
@@ -105,6 +106,42 @@ Arrays iterate by ascending index and objects by Unicode code-point-sorted key. 
 
 Stable error codes are `INVALID_JSON`, `INVALID_YAML`, `INVALID_NAME`, `DATA_NOT_FOUND`, `PARSE_LIMIT_EXCEEDED`, `INVALID_PATH`, `PATH_NOT_FOUND`, `TYPE_MISMATCH`, `INDEX_OUT_OF_RANGE`, `ITERATION_LIMIT_EXCEEDED`, and `ITERATION_CONTEXT_REQUIRED`. Enabling `STRUCTURED_SCHEMA` adds
 `INVALID_SCHEMA`, `SCHEMA_NOT_FOUND`, and `SCHEMA_VALIDATION_FAILED`.
+
+## Reading values as text
+
+`get JSON from … at path` and `current value JSON` always return JSON, so a string comes back with
+its quotes (`"Apple"`). A key lookup then searches for the quoted key, and comparing the value with
+`heading` is never true. Three reporters read the value itself instead:
+
+| Block | Reads | Returns |
+|---|---|---|
+| `text from [NAME] at path [PATH]` | `PATH` in named data | text |
+| `current value at path [PATH]` | `PATH` inside the current loop entry's value | JSON; `$` gives the same result as `current value JSON` |
+| `current text at path [PATH]` | `PATH` inside the current loop entry's value | text |
+
+A string is returned as is, and a number or boolean as its canonical JSON text (`3`, `true`).
+Null, arrays, and objects have no text form and fail with `TYPE_MISMATCH` rather than turning into
+an empty string; read them with the JSON reporters. `PATH` uses the same grammar and errors as the
+other path blocks. The `current …` reporters read the innermost loop, so an element's fields can be
+read without parsing it again under another name, and outside `for each` they fail with
+`ITERATION_CONTEXT_REQUIRED`, like `current key`.
+
+```text
+parse JSON [{"items":[{"type":"heading","text":"Fruit"},{"type":"item","text":"Apple"}]}] as [outline]
+for each in [outline] at path [$.items] max [100]
+  if <(current text at path [$.type]) = [heading]> then
+    say (current text at path [$.text])
+→ Fruit
+```
+
+The same reporter turns a key list into usable keys. With turbowarp-kvs, whose `keys in … as JSON`
+returns a sorted JSON array of keys:
+
+```text
+parse JSON (keys in [scores] as JSON) as [keys]
+for each in [keys] at path [$] max [100]
+  say (value of (current text at path [$]) in [scores])
+```
 
 ## Block reference
 
@@ -180,6 +217,17 @@ Return a named value at a path as JSON.
 |---|---|
 | Type | Reporter |
 | Opcode | `getJsonAtPath` |
+| `NAME` | String, default: `data` |
+| `PATH` | String, default: `$.name` |
+
+### `text from [NAME] at path [PATH]`
+
+Return a string, number, or boolean at a path as text; strings have no JSON quotes.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `getTextAtPath` |
 | `NAME` | String, default: `data` |
 | `PATH` | String, default: `$.name` |
 
@@ -277,6 +325,26 @@ Return the current iteration value as JSON.
 |---|---|
 | Type | Reporter |
 | Opcode | `currentValueJson` |
+
+### `current value at path [PATH]`
+
+Return the value at a path inside the current iteration value as JSON.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentJsonAtPath` |
+| `PATH` | String, default: `$` |
+
+### `current text at path [PATH]`
+
+Return a string, number, or boolean at a path inside the current iteration value as text.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentTextAtPath` |
+| `PATH` | String, default: `$` |
 
 ### `define schema [SCHEMA_ID] version [VERSION] from JSON [TEXT]`
 

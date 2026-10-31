@@ -84,6 +84,18 @@ export function stringifyJson(value: JsonValue): string {
   return JSON.stringify(value);
 }
 
+/**
+ * Renders a value for the text reporters. A string is returned as is, without JSON quotes or
+ * escapes; a number or boolean uses its canonical JSON text. Null, arrays, and objects have no
+ * text form and fail instead of becoming an empty or JSON string.
+ */
+export function scalarToText(value: JsonValue): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return stringifyJson(value);
+  const kind = value === null ? 'null' : Array.isArray(value) ? 'an array' : 'an object';
+  return typeMismatch(`Text requires a string, number, or boolean; found ${kind}.`);
+}
+
 export function parsePath(input: unknown): PathSegment[] {
   const path = String(input);
   if (!path.startsWith('$')) invalidPath();

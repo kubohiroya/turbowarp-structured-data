@@ -75,9 +75,9 @@ describe('StructuredDataExtension', () => {
     expect(info.name).toBe('Structured Data');
     expect(info.blocks.map((block) => block.opcode)).toEqual([
       'parseJson', 'parseYaml', 'toJson', 'toYaml', 'hasStructuredData',
-      'deleteStructuredData', 'getJsonAtPath', 'hasPath', 'setJsonAtPath',
+      'deleteStructuredData', 'getJsonAtPath', 'getTextAtPath', 'hasPath', 'setJsonAtPath',
       'deleteAtPath', 'keysAtPath', 'lengthAtPath', 'forEachAtPath',
-      'currentKey', 'currentIndex', 'currentValueJson'
+      'currentKey', 'currentIndex', 'currentValueJson', 'currentJsonAtPath', 'currentTextAtPath'
     ]);
   });
 
@@ -142,6 +142,139 @@ describe('StructuredDataExtension', () => {
     expect(extension.currentKey({}, util)).toBe('z');
     extension.forEachAtPath({NAME: 'data', PATH: '$', MAX: 2}, util);
     expect(() => extension.currentKey({}, util)).toThrow(StructuredDataError);
+  });
+
+  it('reads text at a path without JSON quotes and refuses values without a text form', () => {
+    const extension = new StructuredDataExtension(Scratch, true);
+    const util = utility();
+    extension.parseJson({
+      TEXT: '{"name":"Apple","quoted":"say \\"hi\\"","empty":"","count":1.50,"ok":true,' +
+        '"none":null,"list":[1],"nested":{"a":1}}',
+      NAME: 'data'
+    }, util);
+    const text = (path: string) => extension.getTextAtPath({NAME: 'data', PATH: path}, util);
+
+    expect(extension.getJsonAtPath({NAME: 'data', PATH: '$.name'}, util)).toBe('"Apple"');
+    expect(text('$.name')).toBe('Apple');
+    expect(text('$.quoted')).toBe('say "hi"');
+    expect(text('$.empty')).toBe('');
+    expect(text('$.count')).toBe('1.5');
+    expect(text('$.ok')).toBe('true');
+    expect(text('$.list[0]')).toBe('1');
+    for (const path of ['$.none', '$.list', '$.nested', '$']) {
+      expect(() => text(path), path).toThrowError(expect.objectContaining({code: 'TYPE_MISMATCH'}));
+    }
+    for (const [path, code] of [
+      ['$..name', 'INVALID_PATH'],
+      ['$.missing', 'PATH_NOT_FOUND'],
+      ['$.name.first', 'TYPE_MISMATCH'],
+      ['$.list[1]', 'INDEX_OUT_OF_RANGE']
+    ] as const) {
+      expect(() => text(path), path).toThrowError(expect.objectContaining({code}));
+    }
+    expect(() => extension.getTextAtPath({NAME: 'missing', PATH: '$'}, util)).toThrowError(
+      expect.objectContaining({code: 'DATA_NOT_FOUND'})
+    );
+    expect(() => extension.getTextAtPath({NAME: ' ', PATH: '$'}, util)).toThrowError(
+      expect.objectContaining({code: 'INVALID_NAME'})
+    );
+  });
+
+  it('reads paths inside the current iteration value as JSON and as text', () => {
+    const extension = new StructuredDataExtension(Scratch, true);
+    const util = utility();
+    extension.parseJson({
+      TEXT: '[{"type":"heading","depth":1,"done":false,"meta":null,"tags":["a"]},' +
+        '{"type":"paragraph","depth":2}]',
+      NAME: 'blocks'
+    }, util);
+    const json = (path: string) => extension.currentJsonAtPath({PATH: path}, util);
+    const text = (path: string) => extension.currentTextAtPath({PATH: path}, util);
+
+    extension.forEachAtPath({NAME: 'blocks', PATH: '$', MAX: 10}, util);
+    expect(json('$')).toBe(extension.currentValueJson({}, util));
+    expect(json('$')).toBe('{"depth":1,"done":false,"meta":null,"tags":["a"],"type":"heading"}');
+    expect(json('$.type')).toBe('"heading"');
+    expect(json('$.meta')).toBe('null');
+    expect(json('$.tags')).toBe('["a"]');
+    expect(text('$.type')).toBe('heading');
+    expect(text('$.depth')).toBe('1');
+    expect(text('$.done')).toBe('false');
+    expect(text('$.tags[0]')).toBe('a');
+    for (const path of ['$', '$.meta', '$.tags']) {
+      expect(() => text(path), path).toThrowError(expect.objectContaining({code: 'TYPE_MISMATCH'}));
+    }
+    for (const read of [json, text]) {
+      for (const [path, code] of [
+        ['type', 'INVALID_PATH'],
+        ['$.missing', 'PATH_NOT_FOUND'],
+        ['$.type.name', 'TYPE_MISMATCH'],
+        ['$.tags[1]', 'INDEX_OUT_OF_RANGE']
+      ] as const) {
+        expect(() => read(path), path).toThrowError(expect.objectContaining({code}));
+      }
+    }
+
+    extension.forEachAtPath({NAME: 'blocks', PATH: '$', MAX: 10}, util);
+    expect(text('$.type')).toBe('paragraph');
+    expect(json('$')).toBe('{"depth":2,"type":"paragraph"}');
+    expect(() => json('$.tags')).toThrowError(expect.objectContaining({code: 'PATH_NOT_FOUND'}));
+  });
+
+  it('turns a key list into plain strings for text-keyed lookups', () => {
+    const extension = new StructuredDataExtension(Scratch, true);
+    const util = utility();
+    extension.parseJson({TEXT: '["apple","banana"]', NAME: 'keys'}, util);
+    const texts: string[] = [];
+    const jsons: string[] = [];
+    for (let step = 0; step < 3; step += 1) {
+      extension.forEachAtPath({NAME: 'keys', PATH: '$', MAX: 10}, util);
+      if (step === 2) break;
+      texts.push(extension.currentTextAtPath({PATH: '$'}, util));
+      jsons.push(extension.currentValueJson({}, util));
+    }
+
+    expect(texts).toEqual(['apple', 'banana']);
+    expect(jsons).toEqual(['"apple"', '"banana"']);
+  });
+
+  it('reads the innermost entry in nested loops and requires an active iteration', () => {
+    const extension = new StructuredDataExtension(Scratch, true);
+    const target = {};
+    const thread = {};
+    const outer = utility(target, thread);
+    const inner = utility(target, thread);
+    extension.parseJson({
+      TEXT: '{"groups":[{"name":"fruit","items":["apple","banana"]}]}',
+      NAME: 'data'
+    }, outer);
+    const outsideIteration = expect.objectContaining({code: 'ITERATION_CONTEXT_REQUIRED'});
+
+    // The loop context is checked first, so even an invalid path reports the missing iteration.
+    for (const path of ['$', '$.name', '$..bad']) {
+      expect(() => extension.currentJsonAtPath({PATH: path}, outer)).toThrowError(outsideIteration);
+      expect(() => extension.currentTextAtPath({PATH: path}, outer)).toThrowError(outsideIteration);
+    }
+
+    extension.forEachAtPath({NAME: 'data', PATH: '$.groups', MAX: 10}, outer);
+    expect(extension.currentTextAtPath({PATH: '$.name'}, outer)).toBe('fruit');
+    extension.forEachAtPath({NAME: 'data', PATH: '$.groups[0].items', MAX: 10}, inner);
+    expect(extension.currentTextAtPath({PATH: '$'}, inner)).toBe('apple');
+    expect(extension.currentJsonAtPath({PATH: '$'}, inner)).toBe('"apple"');
+    expect(() => extension.currentTextAtPath({PATH: '$.name'}, inner)).toThrowError(
+      expect.objectContaining({code: 'TYPE_MISMATCH'})
+    );
+    expect(() => extension.currentTextAtPath({PATH: '$'}, {...inner, thread: {}})).toThrowError(
+      outsideIteration
+    );
+    extension.forEachAtPath({NAME: 'data', PATH: '$.groups[0].items', MAX: 10}, inner);
+    expect(extension.currentTextAtPath({PATH: '$'}, inner)).toBe('banana');
+    extension.forEachAtPath({NAME: 'data', PATH: '$.groups[0].items', MAX: 10}, inner);
+    expect(extension.currentTextAtPath({PATH: '$.name'}, outer)).toBe('fruit');
+
+    extension.forEachAtPath({NAME: 'data', PATH: '$.groups', MAX: 10}, outer);
+    expect(() => extension.currentJsonAtPath({PATH: '$'}, outer)).toThrowError(outsideIteration);
+    expect(() => extension.currentTextAtPath({PATH: '$'}, outer)).toThrowError(outsideIteration);
   });
 
   it('reports invalid names, missing data, unsafe YAML, and iteration overflow', () => {

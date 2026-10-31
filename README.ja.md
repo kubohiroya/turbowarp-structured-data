@@ -25,6 +25,7 @@
 - JSONまたはYAMLをtarget-localな名前付きnamespaceへparse
 - 名前付きデータをcanonical JSONまたは決定的YAMLへ変換
 - 制限付きpathによる参照、存在確認、不変更新、削除
+- string・number・booleanをJSONの引用符なしの文字列として読み取り
 - ソート済みkey、array長、上限付き決定的反復
 - compiler manifestとbrowser/server意味論fixtureの出力
 
@@ -42,7 +43,7 @@ structured-data providerはnamed-data 0.4.0を介してbindingの任意の`schem
 
 `STRUCTURED_SCHEMA`は独立した起動時固定flagで、既定`false`です。拡張の読み込み前に
 `globalThis.STRUCTURED_SCHEMA = true`を設定するとSchema関連の9 blockが追加されます。OFFのままなら
-公開blockは従来の16個で意味論も変わらず、保存済みprojectがSchema blockを呼んだ場合は暗黙に無視せず
+公開blockはSchema以外の19個で意味論も変わらず、保存済みprojectがSchema blockを呼んだ場合は暗黙に無視せず
 `INVALID_SCHEMA`で失敗します。既存bindingはschemaRefを要求しないため、flagをOFFにして再読込すれば即時rollbackできます。
 
 Schemaは`@kubohiroya/turbowarp-named-functions/composition`の`validateAgainstSchema`で解釈します。
@@ -85,6 +86,39 @@ arrayはindex昇順、objectはUnicodeコードポイント順で反復します
 安定error codeは`INVALID_JSON`、`INVALID_YAML`、`INVALID_NAME`、`DATA_NOT_FOUND`、`PARSE_LIMIT_EXCEEDED`、`INVALID_PATH`、`PATH_NOT_FOUND`、`TYPE_MISMATCH`、`INDEX_OUT_OF_RANGE`、`ITERATION_LIMIT_EXCEEDED`、`ITERATION_CONTEXT_REQUIRED`です。`STRUCTURED_SCHEMA`を有効にすると
 `INVALID_SCHEMA`、`SCHEMA_NOT_FOUND`、`SCHEMA_VALIDATION_FAILED`が加わります。
 
+## 値を文字列で読む
+
+`get JSON from … at path`と`current value JSON`は常にJSON表記を返すため、文字列は引用符付き（`"Apple"`）になります。
+そのままでは、キーで値を探すと引用符付きのキーを探してしまい、値を`heading`と比較しても一致しません。
+次の3つのreporterは値そのものを読みます。
+
+| block | 読む場所 | 戻り値 |
+|---|---|---|
+| `text from [NAME] at path [PATH]` | 名前付きデータの`PATH` | 文字列 |
+| `current value at path [PATH]` | 反復中の要素の値から見た`PATH` | JSON。`$`なら`current value JSON`と同じ |
+| `current text at path [PATH]` | 反復中の要素の値から見た`PATH` | 文字列 |
+
+stringはそのまま、numberとbooleanはcanonical JSONの表記（`3`、`true`）で返します。
+null・array・objectには文字列の形がないため、空文字列などへ黙って変換せず`TYPE_MISMATCH`で失敗します。これらはJSONのreporterで読みます。
+`PATH`の書式とerrorは他のpath blockと同じです。`current …`は最も内側のloopの要素を読むので、要素を別の名前でparseし直さずに中身を読めます。
+`for each`の外では`current key`と同じく`ITERATION_CONTEXT_REQUIRED`で失敗します。
+
+```text
+parse JSON [{"items":[{"type":"heading","text":"Fruit"},{"type":"item","text":"Apple"}]}] as [outline]
+for each in [outline] at path [$.items] max [100]
+  if <(current text at path [$.type]) = [heading]> then
+    say (current text at path [$.text])
+→ Fruit
+```
+
+キーの一覧も、そのまま使えるキーになります。turbowarp-kvsの`keys in … as JSON`（ソート済みのキーのJSON配列）と組み合わせる例です。
+
+```text
+parse JSON (keys in [scores] as JSON) as [keys]
+for each in [keys] at path [$] max [100]
+  say (value of (current text at path [$]) in [scores])
+```
+
 ## ブロック
 
 | 分類 | 主なblock |
@@ -92,8 +126,8 @@ arrayはindex昇順、objectはUnicodeコードポイント順で反復します
 | import | `parse JSON ... as ...`、`parse YAML ... as ...` |
 | export | `to JSON ...`、`to YAML ...` |
 | namespace | `structured data ... exists?`、`delete structured data ...` |
-| path | get、has、set、delete、keys、length |
-| iteration | for each、current key/index/value |
+| path | get JSON、get text、has、set、delete、keys、length |
+| iteration | for each、current key/index/value、current value/text at path |
 | schema（flag ON時） | define/begin/add property/commit、exists?、delete、parse ... with schema、schema of |
 
 ## compiler契約

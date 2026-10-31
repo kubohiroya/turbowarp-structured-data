@@ -55,7 +55,7 @@ it('validates schema-bound values from the standalone bundle, without an editor 
   const blocks = extension;
   const util = {target: {}, thread: {}, stackFrame: {}, startBranch() {}};
 
-  expect(blocks.getInfo({}, util).blocks).toHaveLength(25);
+  expect(blocks.getInfo({}, util).blocks).toHaveLength(28);
   blocks.defineSchema(
     {
       SCHEMA_ID: 'person',

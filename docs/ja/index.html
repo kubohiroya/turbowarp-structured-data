@@ -181,7 +181,7 @@
 get JSON from [cfg] at path [$.level.speed]
 → 4</code></pre>
             </div>
-            <p>数値やテキストを入れる場所なら、どこでもこのレポーターを使えます。</p>
+            <p>数値やテキストを入れる場所なら、どこでもこのレポーターを使えます。文字列をJSONの引用符なしで読むときは <a href="../#block-getTextAtPath"><code>text from [ ] at path [ ]</code></a> を使います。</p>
           </article>
           <article class="recipe">
             <h3>書き換えて保存する</h3>
@@ -272,7 +272,7 @@ set [save] at path [$.name] to JSON ["Mio"]
             <h2 id="loops-title">すべての項目を、決まった順番で。</h2>
           </div>
           <p>
-            <code>for each in [ ] at path [ ] max [ ]</code> は、配列の項目またはオブジェクトのキーごとに中のブロックを1回ずつ実行します。ループの中では3つのレポーターで現在位置がわかります。
+            <code>for each in [ ] at path [ ] max [ ]</code> は、配列の項目またはオブジェクトのキーごとに中のブロックを1回ずつ実行します。ループの中では、次のレポーターで現在位置と現在の項目の中身がわかります。
           </p>
         </div>
 
@@ -304,6 +304,14 @@ for each in [shop] at path [$.items] max [100]
                 <tr>
                   <td><code>current value JSON</code></td>
                   <td>現在の項目（JSON）。</td>
+                </tr>
+                <tr>
+                  <td><code>current value at path [ ]</code></td>
+                  <td>現在の項目の中の1か所（JSON）。<code>$</code>なら項目全体。</td>
+                </tr>
+                <tr>
+                  <td><code>current text at path [ ]</code></td>
+                  <td>現在の項目の中の1か所（引用符なしの文字列）。<code>"apple"</code>ではなく<code>apple</code>。null・配列・オブジェクトはエラー。</td>
                 </tr>
               </tbody>
             </table>
@@ -361,7 +369,7 @@ for each in [shop] at path [$.items] max [100]
               </tr>
               <tr>
                 <td>1か所を読む・確かめる</td>
-                <td><a href="../#block-getJsonAtPath"><code>get JSON from [ ] at path [ ]</code></a>、<a href="../#block-hasPath"><code>structured data [ ] has path [ ]?</code></a></td>
+                <td><a href="../#block-getJsonAtPath"><code>get JSON from [ ] at path [ ]</code></a>、<a href="../#block-getTextAtPath"><code>text from [ ] at path [ ]</code></a>（文字列を引用符なしで）、<a href="../#block-hasPath"><code>structured data [ ] has path [ ]?</code></a></td>
               </tr>
               <tr>
                 <td>1か所を変更する</td>
@@ -373,7 +381,7 @@ for each in [shop] at path [$.items] max [100]
               </tr>
               <tr>
                 <td>項目ごとに繰り返す</td>
-                <td><a href="../#block-forEachAtPath"><code>for each in [ ] at path [ ] max [ ]</code></a> と <a href="../#block-currentKey"><code>current key</code></a>、<a href="../#block-currentIndex"><code>current index</code></a>、<a href="../#block-currentValueJson"><code>current value JSON</code></a></td>
+                <td><a href="../#block-forEachAtPath"><code>for each in [ ] at path [ ] max [ ]</code></a> と <a href="../#block-currentKey"><code>current key</code></a>、<a href="../#block-currentIndex"><code>current index</code></a>、<a href="../#block-currentValueJson"><code>current value JSON</code></a>、<a href="../#block-currentJsonAtPath"><code>current value at path [ ]</code></a>、<a href="../#block-currentTextAtPath"><code>current text at path [ ]</code></a></td>
               </tr>
             </tbody>
           </table>
