@@ -15,13 +15,43 @@ describe('extension API manifest', () => {
     const manifest = createExtensionManifest(extensionConfig.id, source, options);
 
     expect(manifest.formatVersion).toBe(2);
-    expect(manifest.blocks).toHaveLength(28);
+    expect(manifest.blocks).toHaveLength(29);
     for (const block of manifest.blocks) {
       expect(block.resultType).toBeDefined();
       expect(block.effect).toBeDefined();
       expect(block.errors).toBeDefined();
-      expect(block.server?.irOperation).toMatch(/^structuredData\./u);
+      if (block.server?.supported) {
+        expect(block.server.irOperation).toMatch(/^structuredData\./u);
+      } else {
+        // A compiler rejects unsupported blocks, which must not name an operation.
+        expect(block.server).toEqual({supported: false});
+      }
     }
+    expect(
+      manifest.blocks.filter((block) => block.server?.supported !== true).map((block) => block.opcode)
+    ).toEqual(['copyDocumentTree']);
+  });
+
+  it('declares the document tree copy as browser-only with the parse JSON naming errors', () => {
+    const manifest = createExtensionManifest(extensionConfig.id, source, options);
+    const block = manifest.blocks.find((candidate) => candidate.opcode === 'copyDocumentTree');
+
+    expect(block).toEqual({
+      opcode: 'copyDocumentTree',
+      blockType: 'COMMAND',
+      arguments: [
+        {id: 'DOCUMENT', type: 'STRING'},
+        {id: 'LOCATION', type: 'STRING'},
+        {id: 'NAME', type: 'STRING'},
+        {id: 'POSITIONS', type: 'STRING', menu: 'documentTreePositions'}
+      ],
+      resultType: 'void',
+      effect: 'state',
+      immutable: true,
+      errors: ['INVALID_NAME', 'DATA_NOT_FOUND', 'INVALID_PATH', 'PATH_NOT_FOUND', 'TYPE_MISMATCH', 'PARSE_LIMIT_EXCEEDED'],
+      server: {supported: false}
+    });
+    expect(manifest.menus).toEqual([{id: 'documentTreePositions', acceptReporters: false}]);
   });
 
   it('describes how a compiler should read paths and data references', () => {

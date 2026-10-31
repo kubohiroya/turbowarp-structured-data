@@ -3,6 +3,7 @@ export declare const NAMED_DATA_REGISTRY_MVP_DEFAULT = false;
 export declare const NAMED_DATA_SCHEMA_REF_DEFAULT = false;
 export declare const STRUCTURED_SCHEMA_DEFAULT = false;
 export declare const STRUCTURED_DOCUMENT_SOURCE_DEFAULT = false;
+export declare const STRUCTURED_DOCUMENT_TREE_DEFAULT = false;
 export declare function isNamedDataSchemaRefEnabled(source?: {
     __TW_NAMED_DATA_FEATURE_FLAGS__?: {
         NAMED_DATA_SCHEMA_REF?: unknown;
@@ -20,6 +21,10 @@ export declare function isStructuredSchemaEnabled(source?: {
 /** Read once by the extension constructor; pure source adapters remain explicit opt-in APIs. */
 export declare function isStructuredDocumentSourceEnabled(source?: {
     STRUCTURED_DOCUMENT_SOURCE?: unknown;
+}): boolean;
+/** Read once by the extension constructor; the document tree copy block needs MVP and this flag. */
+export declare function isStructuredDocumentTreeEnabled(source?: {
+    STRUCTURED_DOCUMENT_TREE?: unknown;
 }): boolean;
 export declare const extensionConfig: {
     readonly id: "kubohiroyastructureddata";

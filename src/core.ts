@@ -31,6 +31,12 @@ export interface StructuredDataErrorDetails {
   path?: string;
   /** What the schema expected at that path, for example `number` or `required`. */
   expected?: string;
+  /** Document Data document a tree copy read from. */
+  documentName?: string;
+  /** Document Data location a tree copy read, in the `$`, `$[0][1]`, or selector syntax. */
+  location?: string;
+  /** Code reported by the other package, for example the Document Data `DocumentTreeError` code. */
+  originalCode?: string;
 }
 
 export class StructuredDataError extends Error {

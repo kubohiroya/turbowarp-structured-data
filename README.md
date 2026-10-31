@@ -27,6 +27,7 @@ Run `pnpm run samples:build` after source/bundle changes and `pnpm run samples:c
 - reads, detects, immutably updates, and deletes values with a restricted path grammar;
 - reads strings, numbers, and booleans as plain text, so a string comes back without JSON quotes;
 - lists sorted object keys, reports array lengths, and performs bounded deterministic iteration;
+- copies an HTML or Markdown tree parsed by Document Data into a named value (opt-in);
 - emits a machine-readable compiler manifest and browser/server parity fixtures.
 
 ## Requirements and safety
@@ -53,7 +54,8 @@ immediately return to metadata without schema identities.
 
 `STRUCTURED_SCHEMA` is a separate startup-fixed flag, also defaulting to `false`. Set
 `globalThis.STRUCTURED_SCHEMA = true` before loading the extension to add nine schema blocks; with
-the flag off the extension publishes only the nineteen non-schema blocks, with the same semantics, and
+the flag off the extension publishes only its nineteen core blocks (twenty with
+`STRUCTURED_DOCUMENT_TREE`), with the same semantics, and
 a schema block that a saved project still calls fails with `INVALID_SCHEMA` rather than being
 ignored. Existing bindings never require a `schemaRef`, so turning the flag off and reloading is
 the immediate rollback.
@@ -143,6 +145,53 @@ for each in [keys] at path [$] max [100]
   say (value of (current text at path [$]) in [scores])
 ```
 
+## Copying document trees
+
+`copy document [DOCUMENT] at [LOCATION] [POSITIONS] as [NAME]` copies a document parsed by
+[Document Data](https://github.com/kubohiroya/turbowarp-document-data), or the part at `LOCATION`,
+into a named value, so `for each`, the path blocks, and the text reporters can walk an HTML or
+Markdown tree. The tree is copied in memory rather than through JSON text, so the 256 KiB input
+limit of `parse JSON` does not apply, but depth 64 and 50,000 values do, counted from the copied
+node. Each tree level adds an object and a `children` array, so a subtree more than about 31 levels
+deep fails with `PARSE_LIMIT_EXCEEDED`; copy a smaller part instead.
+
+The block appears only when both `STRUCTURED_DATA_MVP` and the startup-fixed
+`STRUCTURED_DOCUMENT_TREE` flag are `true`; the new flag defaults to `false`. A saved project that
+calls the block while either flag is off fails with `DATA_NOT_FOUND` rather than being ignored.
+Document Data must also run without the sandbox with its `DOCUMENT_DATA_MVP` flag on. The registry
+is looked up when the block runs, so the two extensions can load in either order.
+
+- `DOCUMENT` names a Document Data document of the running sprite or stage. `LOCATION` is `$`, a
+  tree path such as `$[0][1]`, or a simple HTML selector (a tag, `#id`, or `.class`; the first match).
+- `POSITIONS` is `without positions` (the default) or `with positions`. With positions, nodes that
+  have one keep `position: {start, end}`: `line` and `column` count from 1 and `offset` from 0, in
+  UTF-16 units of the text that was parsed. A document changed by `replace text in document` has no
+  positions.
+- `NAME` is bound like `parse JSON … as [NAME]`: per target, replacing an existing value and any
+  schema it carried, and discarded when the project stops. The copy is a snapshot: later changes to
+  the document are not reflected, and changing the copy never changes the document.
+- With a `LOCATION` `L` in the `$` or `$[…]` form, `$.children[i].children[j]` in the copy is the
+  Document Data location `L[i][j]` (`$[i][j]` when `L` is `$`), so a node found by a loop can be
+  passed back to `text in document … at …`. A copy taken with a selector has no such mapping; use the
+  `$[…]` form when you need to go back to the document.
+- A failure leaves an existing value unchanged and uses the existing codes: Document Data not loaded
+  or the document missing → `DATA_NOT_FOUND`; a malformed `LOCATION` → `INVALID_PATH`; no node at
+  `LOCATION` → `PATH_NOT_FOUND`; a copy too deep or too large → `PARSE_LIMIT_EXCEEDED`; a blank name
+  → `INVALID_NAME`; an unknown `POSITIONS` value → `TYPE_MISMATCH`. The error's `details` carry
+  `documentName`, `location`, and Document Data's `originalCode`.
+
+```text
+parse Markdown [# Fruit
+
+- Apple
+- Pear] as document [page]
+copy document [page] at [$] [with positions] as [tree]
+for each in [tree] at path [$.children] max [100]
+  if <(current text at path [$.type]) = [heading]> then
+    say (join (current text at path [$.position.start.line]) (join ": " (text in document [page] at (join "$[" (join (current index) "]")))))
+→ 1: Fruit
+```
+
 ## Block reference
 
 <!-- BEGIN GENERATED BLOCKS -->
@@ -168,6 +217,19 @@ Parse safe YAML text into the target-local structured data namespace.
 | Opcode | `parseYaml` |
 | `TEXT` | String, default: `name: TurboWarp` |
 | `NAME` | String, default: `data` |
+
+### `copy document [DOCUMENT] at [LOCATION] [POSITIONS] as [NAME]`
+
+Copy a Document Data document, or the part at a location, into the target-local structured data namespace.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `copyDocumentTree` |
+| `DOCUMENT` | String, default: `page` |
+| `LOCATION` | String, default: `$` |
+| `POSITIONS` | String, default: `without positions` |
+| `NAME` | String, default: `tree` |
 
 ### `to JSON [NAME]`
 
@@ -454,6 +516,8 @@ Return the schemaRef bound to named data as JSON, or an empty object when it has
 ## Compiler contract
 
 `dist/extension-manifest.json` format version 3 declares the target-local named reference model, typed path segments, block argument/result types, effects, stable errors, and IR v2 operations. See [architecture](docs/architecture.md), the [JSON Schema](schemas/extension-manifest.schema.json), and [semantic parity fixtures](tests/fixtures/semantic-parity.json).
+
+`copyDocumentTree` is declared `server: {supported: false}` without an IR operation, because the server has no Document Data; a server compiler rejects a project that uses it.
 
 ## Integrated-build module API
 

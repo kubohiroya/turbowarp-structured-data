@@ -27,6 +27,7 @@
 - 制限付きpathによる参照、存在確認、不変更新、削除
 - string・number・booleanをJSONの引用符なしの文字列として読み取り
 - ソート済みkey、array長、上限付き決定的反復
+- Document Dataで解析したHTML/Markdownの木を名前付きの値へコピー（起動時flagで有効化）
 - compiler manifestとbrowser/server意味論fixtureの出力
 
 ## 動作条件と安全性
@@ -43,7 +44,7 @@ structured-data providerはnamed-data 0.4.0を介してbindingの任意の`schem
 
 `STRUCTURED_SCHEMA`は独立した起動時固定flagで、既定`false`です。拡張の読み込み前に
 `globalThis.STRUCTURED_SCHEMA = true`を設定するとSchema関連の9 blockが追加されます。OFFのままなら
-公開blockはSchema以外の19個で意味論も変わらず、保存済みprojectがSchema blockを呼んだ場合は暗黙に無視せず
+公開blockは中核の19個（`STRUCTURED_DOCUMENT_TREE`有効時は20個）で意味論も変わらず、保存済みprojectがSchema blockを呼んだ場合は暗黙に無視せず
 `INVALID_SCHEMA`で失敗します。既存bindingはschemaRefを要求しないため、flagをOFFにして再読込すれば即時rollbackできます。
 
 Schemaは`@kubohiroya/turbowarp-named-functions/composition`の`validateAgainstSchema`で解釈します。
@@ -119,11 +120,40 @@ for each in [keys] at path [$] max [100]
   say (value of (current text at path [$]) in [scores])
 ```
 
+## 文書の木をコピーする
+
+`copy document [DOCUMENT] at [LOCATION] [POSITIONS] as [NAME]`は、[Document Data](https://github.com/kubohiroya/turbowarp-document-data)で解析した文書の全体、または`LOCATION`の部分木を名前付きの値へコピーします。
+コピーした値は`for each`、path block、文字列で返すreporterでたどれます。
+木はJSON文字列を経由せずメモリ上でコピーするため、`parse JSON`の入力256 KiBの上限はかかりません。深さ64・50,000値の上限はかかり、深さはコピーする部分木の根から数えます。
+木の1段ごとにobjectと`children`配列で値が2段深くなるため、部分木の根から約31段より深い木は`PARSE_LIMIT_EXCEEDED`で失敗します。その場合は、より小さな部分をコピーします。
+
+このblockは`STRUCTURED_DATA_MVP`と、起動時固定の新しいflag`STRUCTURED_DOCUMENT_TREE`（既定`false`）の両方が`true`のときだけ公開します。
+どちらかがOFFのまま保存済みprojectがこのblockを呼ぶと、暗黙に無視せず`DATA_NOT_FOUND`で失敗します。
+Document Dataもsandboxなしで、`DOCUMENT_DATA_MVP`を有効にして読み込みます。registryはblockの実行時に探すので、2つの拡張の読み込み順は問いません。
+
+- `DOCUMENT`は実行中のspriteまたはstageのDocument Dataの文書名です。`LOCATION`は`$`、`$[0][1]`形式の木のpath、または単純なHTML selector（tag、`#id`、`.class`。最初に一致した要素）です。
+- `POSITIONS`は`without positions`（既定）か`with positions`です。`with positions`では、位置を持つノードに`position: {start, end}`が残ります。`line`と`column`は1から、`offset`は0から、解析した文字列のUTF-16単位で数えます。`replace text in document`で変更した文書には位置がありません。
+- `NAME`は`parse JSON … as [NAME]`と同じく結び付けます。target単位で、同名の値と、その値に結び付いていたSchemaを置き換え、project停止時に破棄します。コピーはスナップショットで、後で文書を変えても反映されず、コピーを変えても文書は変わりません。
+- `LOCATION`に`$`または`$[…]`形式の`L`を指定した場合、コピーした値の`$.children[i].children[j]`はDocument Dataのlocation `L[i][j]`に対応します（`L`が`$`なら`$[i][j]`）。反復で見つけた要素を、そのまま`text in document … at …`へ渡せます。HTML selectorでコピーした場合はこの対応が取れないため、元の文書へ戻したいときは`$[…]`形式で指定します。
+- 失敗したときは既存の値を変えず、既存のerror codeを使います。Document Dataが読み込まれていない・文書がない場合は`DATA_NOT_FOUND`、`LOCATION`の書式が不正なら`INVALID_PATH`、該当するノードがなければ`PATH_NOT_FOUND`、深すぎる・大きすぎる場合は`PARSE_LIMIT_EXCEEDED`、名前が空なら`INVALID_NAME`、`POSITIONS`が未知の値なら`TYPE_MISMATCH`です。errorの`details`には`documentName`、`location`、Document Data側の`originalCode`が入ります。
+
+```text
+parse Markdown [# Fruit
+
+- Apple
+- Pear] as document [page]
+copy document [page] at [$] [with positions] as [tree]
+for each in [tree] at path [$.children] max [100]
+  if <(current text at path [$.type]) = [heading]> then
+    say (join (current text at path [$.position.start.line]) (join ": " (text in document [page] at (join "$[" (join (current index) "]")))))
+→ 1: Fruit
+```
+
 ## ブロック
 
 | 分類 | 主なblock |
 |---|---|
-| import | `parse JSON ... as ...`、`parse YAML ... as ...` |
+| import | `parse JSON ... as ...`、`parse YAML ... as ...`、`copy document ... at ... ... as ...`（flag ON時） |
 | export | `to JSON ...`、`to YAML ...` |
 | namespace | `structured data ... exists?`、`delete structured data ...` |
 | path | get JSON、get text、has、set、delete、keys、length |
@@ -133,6 +163,8 @@ for each in [keys] at path [$] max [100]
 ## compiler契約
 
 `dist/extension-manifest.json` format version 3はtarget-local named reference、型付きpath、argument/result型、effect、error、IR v2 operationを宣言します。[architecture](docs/architecture.ja.md)、[JSON Schema](schemas/extension-manifest.schema.json)、[semantic parity fixture](tests/fixtures/semantic-parity.json)を参照してください。
+
+サーバー側にはDocument Dataがないため、`copyDocumentTree`はIR operationを持たない`server: {supported: false}`として宣言します。server compilerはこのblockを使うprojectを拒否します。
 
 ## 統合ビルド用module API
 

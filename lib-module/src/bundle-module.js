@@ -1,5 +1,6 @@
 import { PARSE_LIMITS, parseValue, serializeValue } from "@kubohiroya/turbowarp-yaml-json/codec";
 import { validateAgainstSchema, validateSchemaDefinition } from "@kubohiroya/turbowarp-named-functions/composition";
+import { documentTreeErrorCodes, getDocumentTreeRegistry } from "@kubohiroya/turbowarp-document-data/composition";
 import { NamedDataError, bindNamedDataRegistryLifecycle, installNamedDataRegistry } from "@kubohiroya/turbowarp-named-data/composition";
 function isNamedDataSchemaRefEnabled(source = globalThis) {
 	const value = source.__TW_NAMED_DATA_FEATURE_FLAGS__?.NAMED_DATA_SCHEMA_REF;
@@ -20,6 +21,11 @@ function isStructuredSchemaEnabled(source = globalThis) {
 /** Read once by the extension constructor; pure source adapters remain explicit opt-in APIs. */
 function isStructuredDocumentSourceEnabled(source = globalThis) {
 	const value = source.STRUCTURED_DOCUMENT_SOURCE;
+	return value === void 0 ? false : value === true || value === "true";
+}
+/** Read once by the extension constructor; the document tree copy block needs MVP and this flag. */
+function isStructuredDocumentTreeEnabled(source = globalThis) {
+	const value = source.STRUCTURED_DOCUMENT_TREE;
 	return value === void 0 ? false : value === true || value === "true";
 }
 var extensionConfig = {
@@ -562,6 +568,95 @@ function createReadonlySchemaResolver(lookup) {
 		}
 	});
 }
+/** `POSITIONS` menu values; the saved value is the visible text. */
+var DOCUMENT_TREE_POSITIONS = ["without positions", "with positions"];
+/** The depth and value limits `parse JSON` applies. No text is parsed, so no byte limit applies. */
+var DOCUMENT_TREE_LIMITS = Object.freeze({
+	maxDepth: PARSE_LIMITS$1.maxDepth,
+	maxNodes: PARSE_LIMITS$1.maxNodes
+});
+/**
+* Document Data failures expressed with the existing structured-data codes. The caller-side
+* `DOCUMENT_TREE_OPTIONS_INVALID` is deliberately absent: only a bug in this module could cause it,
+* so it is rethrown unchanged instead of being shown as a user error.
+*/
+var ERROR_CODES = {
+	DOCUMENT_TREE_UNAVAILABLE: "DATA_NOT_FOUND",
+	DOCUMENT_NOT_FOUND: "DATA_NOT_FOUND",
+	DOCUMENT_TREE_PROVIDER_INVALID: "DATA_NOT_FOUND",
+	REGISTRY_SCOPE_INVALID: "DATA_NOT_FOUND",
+	REGISTRY_INCOMPATIBLE: "DATA_NOT_FOUND",
+	INVALID_LOCATION: "INVALID_PATH",
+	LOCATION_NOT_FOUND: "PATH_NOT_FOUND",
+	DOCUMENT_LIMIT_EXCEEDED: "PARSE_LIMIT_EXCEEDED"
+};
+function parseDocumentTreePositions(value) {
+	if (value === DOCUMENT_TREE_POSITIONS[0]) return false;
+	if (value === DOCUMENT_TREE_POSITIONS[1]) return true;
+	throw new StructuredDataError("TYPE_MISMATCH", `POSITIONS must be "${DOCUMENT_TREE_POSITIONS[0]}" or "${DOCUMENT_TREE_POSITIONS[1]}".`);
+}
+/**
+* Copies a Document Data subtree as a plain JSON value. The shared registry is looked up on every
+* call, so it does not matter which extension loads first; when structured-data is first, this
+* creates the empty registry that Document Data registers into later.
+*/
+function copyDocumentTree(request) {
+	const details = {
+		documentName: request.documentName,
+		location: request.location
+	};
+	let root;
+	try {
+		root = getDocumentTreeRegistry(request.scope).capture(request.target, request.documentName, {
+			location: request.location,
+			positions: request.positions,
+			limits: DOCUMENT_TREE_LIMITS
+		}).root;
+	} catch (error) {
+		throw mapDocumentTreeError(error, details);
+	}
+	return ownCapturedJson(root, details);
+}
+/** Maps a Document Data error to a structured-data error; anything else is returned unchanged. */
+function mapDocumentTreeError(error, details = {}) {
+	const originalCode = documentTreeErrorCode(error);
+	if (originalCode === void 0) return error;
+	const code = ERROR_CODES[originalCode];
+	if (code === void 0) return error;
+	return new StructuredDataError(code, error.message, {
+		...details,
+		originalCode
+	});
+}
+function documentTreeErrorCode(error) {
+	if (typeof error !== "object" || error === null) return void 0;
+	const { name, code } = error;
+	return name === "DocumentTreeError" && documentTreeErrorCodes.includes(code) ? code : void 0;
+}
+/**
+* The registry answers with whichever provider registered last, so the answer is rebuilt into plain
+* arrays and objects this extension owns, within the same limits, before it can become a binding.
+* Values are counted like the shared codec counts parsed JSON: each value once, the root at depth 0,
+* depth checked first. A cycle therefore fails as too deep.
+*/
+function ownCapturedJson(root, details) {
+	let count = 0;
+	const copy = (value, depth) => {
+		if (depth > DOCUMENT_TREE_LIMITS.maxDepth || ++count > DOCUMENT_TREE_LIMITS.maxNodes) throw new StructuredDataError("PARSE_LIMIT_EXCEEDED", `The copied tree exceeds depth ${DOCUMENT_TREE_LIMITS.maxDepth} or ${DOCUMENT_TREE_LIMITS.maxNodes} values.`, {
+			...details,
+			originalCode: "DOCUMENT_LIMIT_EXCEEDED"
+		});
+		if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+		if (typeof value === "number" && Number.isFinite(value)) return value;
+		if (Array.isArray(value)) return Array.from(value, (item) => copy(item, depth + 1));
+		if (typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, copy(item, depth + 1)]));
+		throw new StructuredDataError("DATA_NOT_FOUND", "The document tree provider returned a value that is not plain JSON.", {
+			...details,
+			originalCode: "DOCUMENT_TREE_PROVIDER_INVALID"
+		});
+	};
+	return copy(root, 0);
+}
 var numberToken = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/u;
 var invalidNumber = Object.freeze({
 	kind: "invalid",
@@ -861,6 +956,10 @@ var sourceEditorDefinitions = [
 }));
 var block_definitions_default = {
 	extensionName: "Structured Data",
+	menus: { "documentTreePositions": {
+		"acceptReporters": false,
+		"items": ["without positions", "with positions"]
+	} },
 	blocks: [
 		{
 			"opcode": "parseJson",
@@ -917,6 +1016,43 @@ var block_definitions_default = {
 				"supported": true,
 				"irOperation": "structuredData.parseYaml"
 			}
+		},
+		{
+			"opcode": "copyDocumentTree",
+			"blockType": "COMMAND",
+			"text": "copy document [DOCUMENT] at [LOCATION] [POSITIONS] as [NAME]",
+			"description": "Copy a Document Data document, or the part at a location, into the target-local structured data namespace.",
+			"arguments": {
+				"DOCUMENT": {
+					"type": "STRING",
+					"defaultValue": "page"
+				},
+				"LOCATION": {
+					"type": "STRING",
+					"defaultValue": "$"
+				},
+				"POSITIONS": {
+					"type": "STRING",
+					"defaultValue": "without positions",
+					"menu": "documentTreePositions"
+				},
+				"NAME": {
+					"type": "STRING",
+					"defaultValue": "tree"
+				}
+			},
+			"resultType": "void",
+			"effect": "state",
+			"immutable": true,
+			"errors": [
+				"INVALID_NAME",
+				"DATA_NOT_FOUND",
+				"INVALID_PATH",
+				"PATH_NOT_FOUND",
+				"TYPE_MISMATCH",
+				"PARSE_LIMIT_EXCEEDED"
+			],
+			"server": { "supported": false }
 		},
 		{
 			"opcode": "toJson",
@@ -1688,6 +1824,7 @@ var StructuredDataNamedDataProvider = class {
 };
 var LOOP_STATE = "structuredDataLoopState";
 var blockDefinitions = block_definitions_default.blocks;
+var menuDefinitions = block_definitions_default.menus;
 /** Blocks that only appear while the startup-fixed schema flag is on. */
 var SCHEMA_OPCODES = /* @__PURE__ */ new Set([
 	"defineSchema",
@@ -1700,11 +1837,14 @@ var SCHEMA_OPCODES = /* @__PURE__ */ new Set([
 	"parseYamlWithSchema",
 	"schemaOf"
 ]);
+/** Blocks that only appear while the startup-fixed document tree flag is on. */
+var DOCUMENT_TREE_OPCODES = /* @__PURE__ */ new Set(["copyDocumentTree"]);
 var StructuredDataExtension = class {
-	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaEnabled = isStructuredSchemaEnabled(), documentSourceEnabled = isStructuredDocumentSourceEnabled()) {
+	constructor(scratch, enabled = isStructuredDataMvpEnabled(), namedDataEnabled = isNamedDataRegistryMvpEnabled(), schemaEnabled = isStructuredSchemaEnabled(), documentSourceEnabled = isStructuredDocumentSourceEnabled(), documentTreeEnabled = isStructuredDocumentTreeEnabled()) {
 		this.scratch = scratch;
 		this.schemaEnabled = schemaEnabled;
 		this.documentSourceEnabled = documentSourceEnabled;
+		this.documentTreeEnabled = documentTreeEnabled;
 		this.disposed = false;
 		this.sourceProjections = /* @__PURE__ */ new Set();
 		this.registries = /* @__PURE__ */ new WeakMap();
@@ -1780,12 +1920,22 @@ var StructuredDataExtension = class {
 		this.unbindNamedDataRegistryLifecycle?.();
 	}
 	getInfo() {
+		const visible = this.enabled ? blockDefinitions.filter((block) => (this.schemaEnabled || !SCHEMA_OPCODES.has(block.opcode)) && (this.documentTreeEnabled || !DOCUMENT_TREE_OPCODES.has(block.opcode))) : [];
+		const menuIds = new Set(visible.flatMap((block) => Object.values(block.arguments).flatMap((argument) => argument.menu ?? [])));
 		return {
 			id: extensionConfig.id,
 			name: this.scratch.translate(block_definitions_default.extensionName),
 			docsURI: extensionConfig.docsURI,
 			blockIconURI: extensionConfig.blockIconURI,
-			blocks: this.enabled ? blockDefinitions.filter((block) => this.schemaEnabled || !SCHEMA_OPCODES.has(block.opcode)).map((block) => this.toScratchBlock(block)) : []
+			blocks: visible.map((block) => this.toScratchBlock(block)),
+			menus: Object.fromEntries([...menuIds].map((id) => {
+				const menu = menuDefinitions[id];
+				if (!menu) throw new Error(`Unknown menu: ${id}`);
+				return [id, {
+					acceptReporters: menu.acceptReporters,
+					items: [...menu.items]
+				}];
+			}))
 		};
 	}
 	parseJson(args, util) {
@@ -1793,6 +1943,25 @@ var StructuredDataExtension = class {
 	}
 	parseYaml(args, util) {
 		this.store(util.target, args.NAME, parseYamlDocument(this.scratch.Cast.toString(args.TEXT)), "yaml");
+	}
+	/**
+	* Copies a Document Data subtree into a named value exactly as `parse JSON` binds one: the same
+	* target-local name, replacement, stop-time clearing, and a schema the old value carried is dropped.
+	* Every check and the copy finish before the binding changes, so a failure keeps the old value.
+	*/
+	copyDocumentTree(args, util) {
+		this.requireDocumentTreeSupport();
+		const name = this.name(args.NAME);
+		const documentName = this.scratch.Cast.toString(args.DOCUMENT).trim();
+		if (documentName.length === 0) throw new StructuredDataError("INVALID_NAME", "Document name cannot be empty.");
+		const value = copyDocumentTree({
+			scope: this.scratch.vm,
+			target: util.target,
+			documentName,
+			location: this.scratch.Cast.toString(args.LOCATION),
+			positions: parseDocumentTreePositions(this.scratch.Cast.toString(args.POSITIONS))
+		});
+		this.setBinding(util.target, name, value, "json");
 	}
 	toJson(args, util) {
 		return renderJsonDocument(this.requireData(util.target, args.NAME));
@@ -1965,6 +2134,10 @@ var StructuredDataExtension = class {
 		}
 		return registry;
 	}
+	requireDocumentTreeSupport() {
+		if (this.enabled && this.documentTreeEnabled) return;
+		throw new StructuredDataError("DATA_NOT_FOUND", "Copying document trees is off; set STRUCTURED_DATA_MVP and STRUCTURED_DOCUMENT_TREE before the extension loads.");
+	}
 	requireSchemaSupport() {
 		if (this.schemaEnabled) return;
 		throw new StructuredDataError("INVALID_SCHEMA", "Schema support is off; set STRUCTURED_SCHEMA before the extension loads.");
@@ -2052,7 +2225,8 @@ var StructuredDataExtension = class {
 			text: this.scratch.translate(block.text),
 			arguments: Object.fromEntries(Object.entries(block.arguments).map(([name, argument]) => [name, {
 				type: this.scratch.ArgumentType[argument.type],
-				defaultValue: argument.defaultValue
+				defaultValue: argument.defaultValue,
+				...argument.menu === void 0 ? {} : { menu: argument.menu }
 			}]))
 		};
 	}
