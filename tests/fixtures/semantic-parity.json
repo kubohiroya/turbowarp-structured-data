@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "manifestFormatVersion": 3,
+  "manifestFormatVersion": 2,
   "dataReference": {"kind": "named", "scope": "target", "lifetime": "untilProjectStop"},
   "serverUnsupportedOpcodes": ["copyDocumentTree"],
   "cases": [

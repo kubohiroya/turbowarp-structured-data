@@ -29,7 +29,7 @@ Canonical JSON recursively sorts object keys by Unicode code point. YAML uses th
 
 `capture(target, name, {location, positions, limits})` receives the codec's `maxDepth` and `maxNodes`, the same limits `parse JSON` applies; there is no byte limit because no text is parsed. The provider counts values like the codec and stops at the first value over a limit. Because the newest registration answers, `src/document-tree.ts` rebuilds the answer into plain arrays and objects within the same limits before binding it, so the stored value is an ordinary JSON value owned by this extension. Binding then follows `parse JSON`: target-local name, replacement, a schema reference dropped, and clearing on project stop. Document Data codes map onto existing codes (`DOCUMENT_TREE_UNAVAILABLE`, `DOCUMENT_NOT_FOUND`, `DOCUMENT_TREE_PROVIDER_INVALID`, `REGISTRY_SCOPE_INVALID`, `REGISTRY_INCOMPATIBLE` → `DATA_NOT_FOUND`; `INVALID_LOCATION` → `INVALID_PATH`; `LOCATION_NOT_FOUND` → `PATH_NOT_FOUND`; `DOCUMENT_LIMIT_EXCEEDED` → `PARSE_LIMIT_EXCEEDED`), with the original code in `details.originalCode`. `DOCUMENT_TREE_OPTIONS_INVALID` would mean a bug in the block and is rethrown unchanged.
 
-## Compiler manifest v3
+## Compiler manifest v2
 
 The manifest declares a named reference with target scope, lifetime until project stop, and `jsonValue` contents. Each opcode provides arguments, result type, effect (`pure`, `state`, or `control`), possible errors, and its IR v2 operation. Server adapters must provide an equivalent target-local slot environment and reject unsupported manifest versions. A block the server cannot run is declared `server: {supported: false}` with no operation; `copyDocumentTree` is the only one, because the server has no Document Data.
 

@@ -6,6 +6,7 @@ import {describe, expect, it} from 'vitest';
 import definitions from '../src/block-definitions.json';
 import extensionTypes from '../src/extension-types.json';
 import {extensionConfig} from '../src/config.js';
+import parityFixture from './fixtures/semantic-parity.json';
 
 const source = {...definitions, ...extensionTypes};
 const options = {formatVersion: 2} as const;
@@ -59,6 +60,12 @@ describe('extension API manifest', () => {
 
     expect(manifest.pathSegmentType).toEqual(extensionTypes.pathSegmentType);
     expect(manifest.dataReferenceType).toEqual(extensionTypes.dataReferenceType);
+  });
+
+  it('names the published format version in the semantic parity fixture', () => {
+    const manifest = createExtensionManifest(extensionConfig.id, source, options);
+
+    expect(parityFixture.manifestFormatVersion).toBe(manifest.formatVersion);
   });
 
   it('declares the text and current-path reporters beside their JSON counterparts', () => {
