@@ -162,7 +162,7 @@ for each in [tree] at path [$.children] max [100]
 
 ## compiler契約
 
-`dist/extension-manifest.json` format version 3はtarget-local named reference、型付きpath、argument/result型、effect、error、IR v2 operationを宣言します。[architecture](docs/architecture.ja.md)、[JSON Schema](schemas/extension-manifest.schema.json)、[semantic parity fixture](tests/fixtures/semantic-parity.json)を参照してください。
+`dist/extension-manifest.json` format version 2はtarget-local named reference、型付きpath、argument/result型、effect、error、IR v2 operationを宣言します。[architecture](docs/architecture.ja.md)、[共通のJSON Schema](https://github.com/kubohiroya/turbowarp-extension-manifest/blob/main/schemas/extension-manifest.schema.json)、[semantic parity fixture](tests/fixtures/semantic-parity.json)を参照してください。
 
 サーバー側にはDocument Dataがないため、`copyDocumentTree`はIR operationを持たない`server: {supported: false}`として宣言します。server compilerはこのblockを使うprojectを拒否します。
 

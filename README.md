@@ -515,7 +515,7 @@ Return the schemaRef bound to named data as JSON, or an empty object when it has
 
 ## Compiler contract
 
-`dist/extension-manifest.json` format version 3 declares the target-local named reference model, typed path segments, block argument/result types, effects, stable errors, and IR v2 operations. See [architecture](docs/architecture.md), the [JSON Schema](schemas/extension-manifest.schema.json), and [semantic parity fixtures](tests/fixtures/semantic-parity.json).
+`dist/extension-manifest.json` format version 2 declares the target-local named reference model, typed path segments, block argument/result types, effects, stable errors, and IR v2 operations. See [architecture](docs/architecture.md), the [shared JSON Schema](https://github.com/kubohiroya/turbowarp-extension-manifest/blob/main/schemas/extension-manifest.schema.json), and [semantic parity fixtures](tests/fixtures/semantic-parity.json).
 
 `copyDocumentTree` is declared `server: {supported: false}` without an IR operation, because the server has no Document Data; a server compiler rejects a project that uses it.
 

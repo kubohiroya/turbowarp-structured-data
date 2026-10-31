@@ -31,7 +31,7 @@ canonical JSONはobject keyを再帰的にUnicodeコードポイント順へ揃�
 
 `capture(target, name, {location, positions, limits})`には、`parse JSON`と同じcodecの`maxDepth`と`maxNodes`を渡します。文字列をparseしないのでbyte数の上限はありません。providerはcodecと同じ数え方で値を数え、上限を超えた最初の値で打ち切ります。registryは最後に登録したproviderが答えるため、`src/document-tree.ts`は受け取った値を同じ上限の中で通常のarrayとobjectへ組み直してから結び付けます。保存する値は、この拡張が所有する通常のJSON valueになります。結び付け方は`parse JSON`と同じで、target-localな名前、置換、schema参照の破棄、project停止時の破棄です。Document Dataのcodeは既存のcodeへ対応させます（`DOCUMENT_TREE_UNAVAILABLE`、`DOCUMENT_NOT_FOUND`、`DOCUMENT_TREE_PROVIDER_INVALID`、`REGISTRY_SCOPE_INVALID`、`REGISTRY_INCOMPATIBLE` → `DATA_NOT_FOUND`、`INVALID_LOCATION` → `INVALID_PATH`、`LOCATION_NOT_FOUND` → `PATH_NOT_FOUND`、`DOCUMENT_LIMIT_EXCEEDED` → `PARSE_LIMIT_EXCEEDED`）。元のcodeは`details.originalCode`に入ります。`DOCUMENT_TREE_OPTIONS_INVALID`はblockの不具合を意味するため、変換せずにそのまま投げ直します。
 
-## compiler manifest v3
+## compiler manifest v2
 
 manifestはtarget scope、project停止までのlifetime、`jsonValue`内容を持つnamed referenceを宣言します。各opcodeはargument、result型、effect（`pure`、`state`、`control`）、error、IR v2 operationを持ちます。server adapterは同等のtarget-local slot環境を提供し、未対応manifest versionを拒否します。サーバーで実行できないblockはoperationを持たない`server: {supported: false}`として宣言します。サーバー側にはDocument Dataがないため、該当するのは`copyDocumentTree`だけです。
 
