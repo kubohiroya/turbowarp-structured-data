@@ -7361,11 +7361,6 @@ function createReadonlySchemaResolver(lookup) {
 		}
 	});
 }
-Object.freeze({
-	maxBytes: 1048576,
-	maxDepth: 64,
-	maxNodes: 1e5
-});
 var documentTreeRegistrySymbol = /* @__PURE__ */ Symbol.for("@kubohiroya/turbowarp-document-data/document-tree-registry/v1");
 var documentTreeErrorCodes = Object.freeze([
 	"DOCUMENT_TREE_UNAVAILABLE",
@@ -7385,16 +7380,16 @@ var DocumentTreeError = class extends Error {
 		this.code = code;
 	}
 };
-var fail3 = (code, message) => {
+var fail2 = (code, message) => {
 	throw new DocumentTreeError(code, message);
 };
 var isLimit = (value) => Number.isSafeInteger(value) && value >= 0;
 var captureOptions = (options) => {
-	if (typeof options !== "object" || options === null) fail3("DOCUMENT_TREE_OPTIONS_INVALID", "Capture options are required.");
+	if (typeof options !== "object" || options === null) fail2("DOCUMENT_TREE_OPTIONS_INVALID", "Capture options are required.");
 	const { location, positions = false, limits } = options;
-	if (typeof location !== "string") fail3("INVALID_LOCATION", "A document location must be text.");
-	if (typeof positions !== "boolean") fail3("DOCUMENT_TREE_OPTIONS_INVALID", "positions must be true or false.");
-	if (typeof limits !== "object" || limits === null || !isLimit(limits.maxDepth) || !isLimit(limits.maxNodes)) fail3("DOCUMENT_TREE_OPTIONS_INVALID", "limits.maxDepth and limits.maxNodes must be non-negative integers.");
+	if (typeof location !== "string") fail2("INVALID_LOCATION", "A document location must be text.");
+	if (typeof positions !== "boolean") fail2("DOCUMENT_TREE_OPTIONS_INVALID", "positions must be true or false.");
+	if (typeof limits !== "object" || limits === null || !isLimit(limits.maxDepth) || !isLimit(limits.maxNodes)) fail2("DOCUMENT_TREE_OPTIONS_INVALID", "limits.maxDepth and limits.maxNodes must be non-negative integers.");
 	return Object.freeze({
 		location,
 		positions,
@@ -7405,7 +7400,7 @@ var captureOptions = (options) => {
 	});
 };
 var captureResult = (result) => {
-	if (typeof result !== "object" || result === null || result.kind !== "html" && result.kind !== "markdown" || typeof result.revision !== "string" || typeof result.root !== "object" || result.root === null || Array.isArray(result.root)) fail3("DOCUMENT_TREE_PROVIDER_INVALID", "The document tree provider returned an invalid capture.");
+	if (typeof result !== "object" || result === null || result.kind !== "html" && result.kind !== "markdown" || typeof result.revision !== "string" || typeof result.root !== "object" || result.root === null || Array.isArray(result.root)) fail2("DOCUMENT_TREE_PROVIDER_INVALID", "The document tree provider returned an invalid capture.");
 	return {
 		kind: result.kind,
 		revision: result.revision,
@@ -7417,7 +7412,7 @@ function createDocumentTreeRegistry() {
 	return Object.freeze({
 		apiVersion: 1,
 		register(provider) {
-			if (!provider || typeof provider.capture !== "function") fail3("DOCUMENT_TREE_PROVIDER_INVALID", "A document tree provider with capture() is required.");
+			if (!provider || typeof provider.capture !== "function") fail2("DOCUMENT_TREE_PROVIDER_INVALID", "A document tree provider with capture() is required.");
 			const entry = Object.freeze({ capture: provider.capture.bind(provider) });
 			entries.push(entry);
 			let registered = true;
@@ -7431,18 +7426,18 @@ function createDocumentTreeRegistry() {
 		capture(target, name, options) {
 			const normalized = captureOptions(options);
 			const entry = entries.at(-1);
-			if (!entry) fail3("DOCUMENT_TREE_UNAVAILABLE", "Document Data is not loaded with DOCUMENT_DATA_MVP enabled.");
+			if (!entry) fail2("DOCUMENT_TREE_UNAVAILABLE", "Document Data is not loaded with DOCUMENT_DATA_MVP enabled.");
 			return captureResult(entry.capture(target, name, normalized));
 		}
 	});
 }
 function getDocumentTreeRegistry(scope) {
-	if ((typeof scope !== "object" || scope === null) && typeof scope !== "function") fail3("REGISTRY_SCOPE_INVALID", "A runtime-local scope object is required.");
+	if ((typeof scope !== "object" || scope === null) && typeof scope !== "function") fail2("REGISTRY_SCOPE_INVALID", "A runtime-local scope object is required.");
 	const previous = Object.getOwnPropertyDescriptor(scope, documentTreeRegistrySymbol);
 	if (previous) {
-		if (!Object.hasOwn(previous, "value")) fail3("REGISTRY_SCOPE_INVALID", "The registry slot cannot be an accessor.");
+		if (!Object.hasOwn(previous, "value")) fail2("REGISTRY_SCOPE_INVALID", "The registry slot cannot be an accessor.");
 		const registry2 = previous.value;
-		if (registry2?.apiVersion !== 1 || typeof registry2.register !== "function" || typeof registry2.capture !== "function") fail3("REGISTRY_INCOMPATIBLE", "An incompatible document tree registry occupies this scope.");
+		if (registry2?.apiVersion !== 1 || typeof registry2.register !== "function" || typeof registry2.capture !== "function") fail2("REGISTRY_INCOMPATIBLE", "An incompatible document tree registry occupies this scope.");
 		return registry2;
 	}
 	const registry = createDocumentTreeRegistry();
