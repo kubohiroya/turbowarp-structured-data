@@ -12,8 +12,8 @@ importers:
         specifier: 0.6.0
         version: 0.6.0(@kubohiroya/turbowarp-named-data@0.8.0)(supports-color@7.2.0)
       '@kubohiroya/turbowarp-named-functions':
-        specifier: 0.4.1-rc.2
-        version: 0.4.1-rc.2
+        specifier: 0.4.1
+        version: 0.4.1
       '@kubohiroya/turbowarp-yaml-json':
         specifier: 0.10.0
         version: 0.10.0
@@ -314,8 +314,8 @@ packages:
     resolution: {integrity: sha512-Y73wcm9V6ldihtMME9lJic3eambqHWlLhTXQ78jfzS2EpeECZe1aXnOQeKXkOV2OKIdnowKGGdIdEiAc/Ss3vg==}
     engines: {node: '>=24'}
 
-  '@kubohiroya/turbowarp-named-functions@0.4.1-rc.2':
-    resolution: {integrity: sha512-5RwBIQzj+kV+Flx5DPYiXJP5DqhdnrZ1t7DMQvIc6yalRZWk4VClQywr7nqLS48/pFZTIX2rH8D27v0hDZE6UQ==}
+  '@kubohiroya/turbowarp-named-functions@0.4.1':
+    resolution: {integrity: sha512-jqba9YN7K3AoZCnGPU7sQVFQhloKel4zw3Y3wofPUMPxMTgvkVsDBEUTonguRE/Wx+yNG4Ti3ejT2MASWpfFYw==}
     engines: {node: '>=24'}
 
   '@kubohiroya/turbowarp-yaml-json@0.10.0':
@@ -1542,7 +1542,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-named-data@0.8.0': {}
 
-  '@kubohiroya/turbowarp-named-functions@0.4.1-rc.2': {}
+  '@kubohiroya/turbowarp-named-functions@0.4.1': {}
 
   '@kubohiroya/turbowarp-yaml-json@0.10.0':
     dependencies:
