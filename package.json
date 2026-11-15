@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.11.0-rc.2",
+  "version": "0.11.0-rc.3",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": {
     "name": "Hiroya Kubo",
@@ -90,7 +90,7 @@
   "dependencies": {
     "@kubohiroya/turbowarp-yaml-json": "0.10.0",
     "@kubohiroya/turbowarp-document-data": "0.6.0",
-    "@kubohiroya/turbowarp-named-functions": "0.4.1-rc.2"
+    "@kubohiroya/turbowarp-named-functions": "0.4.1"
   },
   "peerDependencies": {
     "@kubohiroya/turbowarp-named-data": "0.8.0-rc.0 || 0.8.0"
