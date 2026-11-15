@@ -111,22 +111,52 @@ function sourceBinding(argument, bundle, read, check = read, format = "json", ui
 		}
 	};
 }
-/** The optional capability keeps legacy hosts and the startup flag safely inactive. */
+/**
+* The optional capability keeps legacy hosts and the startup flag safely inactive.
+* Every project load disposes the runtime, which releases the registrations, but the extension
+* stays loaded for the next project, so they are registered again once that project has loaded.
+* Only the returned owner dispose is final.
+*/
 function registerSourceEditors(scratch, definitions) {
 	const host = scratch;
 	const api = host.gui?.blockEditors;
 	if (api?.apiVersion !== 1 || typeof api.registerSourceEditor !== "function") return () => {};
+	const runtime = host.vm?.runtime;
 	const removers = [];
 	let active = true;
+	let released = false;
+	const release = () => {
+		for (const remove of removers.splice(0).reverse()) remove();
+	};
+	const register = () => {
+		try {
+			for (const definition of definitions) removers.push(api.registerSourceEditor.call(api, definition));
+		} catch (error) {
+			release();
+			throw error;
+		}
+	};
+	const releaseForProjectLoad = () => {
+		if (!active || released) return;
+		released = true;
+		release();
+	};
+	const restoreAfterProjectLoad = () => {
+		if (!active || !released) return;
+		register();
+		released = false;
+	};
 	const dispose = () => {
 		if (!active) return;
 		active = false;
-		host.vm?.runtime?.off?.("RUNTIME_DISPOSED", dispose);
-		for (const remove of removers.splice(0).reverse()) remove();
+		runtime?.off?.("RUNTIME_DISPOSED", releaseForProjectLoad);
+		runtime?.off?.("PROJECT_LOADED", restoreAfterProjectLoad);
+		release();
 	};
 	try {
-		for (const definition of definitions) removers.push(api.registerSourceEditor.call(api, definition));
-		host.vm?.runtime?.on?.("RUNTIME_DISPOSED", dispose);
+		register();
+		runtime?.on?.("RUNTIME_DISPOSED", releaseForProjectLoad);
+		runtime?.on?.("PROJECT_LOADED", restoreAfterProjectLoad);
 	} catch (error) {
 		dispose();
 		throw error;
@@ -1353,7 +1383,12 @@ var fixedInputEditorDefinitions = [{
 		settings: null
 	})
 }];
-/** Register metadata only; the GUI startup capability owns editor activation. */
+/**
+* Register metadata only; the GUI startup capability owns editor activation.
+* Every project load disposes the runtime, which releases the registrations, but the extension
+* stays loaded for the next project, so they are registered again once that project has loaded.
+* Only the returned owner dispose is final.
+*/
 function registerFixedInputEditors(scratch, definitions, runtimeOverride) {
 	const host = scratch;
 	const api = host.gui?.blockEditors;
@@ -1361,19 +1396,43 @@ function registerFixedInputEditors(scratch, definitions, runtimeOverride) {
 	const runtime = runtimeOverride ?? host.vm?.runtime;
 	const removers = [];
 	let active = true;
+	let released = false;
+	const release = () => {
+		for (const remove of removers.splice(0).reverse()) remove();
+	};
+	const register = () => {
+		try {
+			for (const definition of definitions) {
+				const remove = api.registerFixedInputEditor.call(api, definition);
+				if (typeof remove !== "function") throw new TypeError("Invalid fixed input registration disposer.");
+				removers.push(remove);
+			}
+		} catch (error) {
+			release();
+			throw error;
+		}
+	};
+	const releaseForProjectLoad = () => {
+		if (!active || released) return;
+		released = true;
+		release();
+	};
+	const restoreAfterProjectLoad = () => {
+		if (!active || !released) return;
+		register();
+		released = false;
+	};
 	const dispose = () => {
 		if (!active) return;
 		active = false;
-		runtime?.off?.("RUNTIME_DISPOSED", dispose);
-		for (const remove of removers.splice(0).reverse()) remove();
+		runtime?.off?.("RUNTIME_DISPOSED", releaseForProjectLoad);
+		runtime?.off?.("PROJECT_LOADED", restoreAfterProjectLoad);
+		release();
 	};
 	try {
-		for (const definition of definitions) {
-			const remove = api.registerFixedInputEditor.call(api, definition);
-			if (typeof remove !== "function") throw new TypeError("Invalid fixed input registration disposer.");
-			removers.push(remove);
-		}
-		runtime?.on?.("RUNTIME_DISPOSED", dispose);
+		register();
+		runtime?.on?.("RUNTIME_DISPOSED", releaseForProjectLoad);
+		runtime?.on?.("PROJECT_LOADED", restoreAfterProjectLoad);
 	} catch (error) {
 		dispose();
 		throw error;
