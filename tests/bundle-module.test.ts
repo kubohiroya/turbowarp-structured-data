@@ -91,3 +91,26 @@ it('retains startup defaults through the factory', async () => {
   expect(h.source).not.toHaveBeenCalled(); expect(h.fixed).not.toHaveBeenCalled();
   await extension.dispose();
 });
+
+it('registers the editors again for each project the extension stays loaded for', async () => {
+  // Every project load disposes the runtime, but the extension stays loaded for the next project.
+  vi.stubGlobal('STRUCTURED_DATA_MVP', true);
+  forbidHostGlobals();
+  const {createExtension} = await import('../src/bundle-module.js');
+  const h = makeHost();
+  const extension = createExtension(h.scratch);
+  const sources = h.source.mock.calls.length, fixed = h.fixed.mock.calls.length;
+  expect(sources).toBeGreaterThan(0); expect(fixed).toBeGreaterThan(0);
+  h.emit('RUNTIME_DISPOSED');
+  for (const remove of [...h.sourceCleanups, ...h.fixedCleanups]) expect(remove).toHaveBeenCalledOnce();
+  h.emit('PROJECT_LOADED');
+  expect(h.source).toHaveBeenCalledTimes(sources * 2); expect(h.fixed).toHaveBeenCalledTimes(fixed * 2);
+  for (const remove of [...h.sourceCleanups.slice(sources), ...h.fixedCleanups.slice(fixed)]) expect(remove).not.toHaveBeenCalled();
+  h.emit('PROJECT_LOADED');
+  expect(h.source).toHaveBeenCalledTimes(sources * 2); expect(h.fixed).toHaveBeenCalledTimes(fixed * 2);
+  await extension.dispose();
+  for (const remove of [...h.sourceCleanups, ...h.fixedCleanups]) expect(remove).toHaveBeenCalledOnce();
+  h.emit('RUNTIME_DISPOSED'); h.emit('PROJECT_LOADED');
+  expect(h.source).toHaveBeenCalledTimes(sources * 2); expect(h.fixed).toHaveBeenCalledTimes(fixed * 2);
+  expect([...h.listeners.values()].every(set => set.size === 0)).toBe(true);
+});
