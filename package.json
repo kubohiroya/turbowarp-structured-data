@@ -93,7 +93,7 @@
     "@kubohiroya/turbowarp-named-functions": "0.5.1"
   },
   "peerDependencies": {
-    "@kubohiroya/turbowarp-named-data": "0.8.0-rc.0 || 0.8.0"
+    "@kubohiroya/turbowarp-named-data": "0.8.0-rc.0 || 0.8.0 || 0.8.1"
   },
   "exports": {
     "./*": "./*",
