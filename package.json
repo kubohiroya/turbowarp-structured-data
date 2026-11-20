@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": {
     "name": "Hiroya Kubo",
@@ -75,7 +75,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@kubohiroya/turbowarp-extension-manifest": "^0.5.0",
-    "@kubohiroya/turbowarp-named-data": "0.8.0",
+    "@kubohiroya/turbowarp-named-data": "0.8.1",
     "@kubohiroya/vite-plugin-turbowarp-extension": "^0.11.0",
     "@types/node": "^24.13.3",
     "eslint": "^9.39.5",
@@ -88,9 +88,9 @@
     "@kubohiroya/turbowarp-extension-data-editor": "^0.11.0"
   },
   "dependencies": {
-    "@kubohiroya/turbowarp-yaml-json": "0.11.0",
-    "@kubohiroya/turbowarp-document-data": "0.7.0",
-    "@kubohiroya/turbowarp-named-functions": "0.5.0"
+    "@kubohiroya/turbowarp-yaml-json": "0.11.1",
+    "@kubohiroya/turbowarp-document-data": "0.7.1",
+    "@kubohiroya/turbowarp-named-functions": "0.5.1"
   },
   "peerDependencies": {
     "@kubohiroya/turbowarp-named-data": "0.8.0-rc.0 || 0.8.0"
@@ -108,6 +108,12 @@
     "./document-source": {
       "types": "./lib-source/document-source.d.ts",
       "import": "./lib-source/document-source.js"
+    }
+  },
+  "turbowarpExtension": {
+    "resourceDeclaration": {
+      "schemaVersion": 1,
+      "resources": []
     }
   }
 }
