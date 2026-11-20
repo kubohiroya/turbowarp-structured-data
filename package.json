@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-structured-data",
-  "version": "0.11.0-rc.4",
+  "version": "0.11.0",
   "description": "Named structured data with JSON/YAML codecs and deterministic path operations for TurboWarp.",
   "author": {
     "name": "Hiroya Kubo",
@@ -45,7 +45,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "next"
+    "tag": "latest"
   },
   "packageManager": "pnpm@11.28.8",
   "engines": {
@@ -85,12 +85,12 @@
     "vite": "^8.2.2",
     "vitest": "^5.0.0",
     "react-dom": "18.3.1",
-    "@kubohiroya/turbowarp-extension-data-editor": "^0.8.2"
+    "@kubohiroya/turbowarp-extension-data-editor": "^0.11.0"
   },
   "dependencies": {
-    "@kubohiroya/turbowarp-yaml-json": "0.10.0",
-    "@kubohiroya/turbowarp-document-data": "0.6.0",
-    "@kubohiroya/turbowarp-named-functions": "0.4.1"
+    "@kubohiroya/turbowarp-yaml-json": "0.11.0",
+    "@kubohiroya/turbowarp-document-data": "0.7.0",
+    "@kubohiroya/turbowarp-named-functions": "0.5.0"
   },
   "peerDependencies": {
     "@kubohiroya/turbowarp-named-data": "0.8.0-rc.0 || 0.8.0"
